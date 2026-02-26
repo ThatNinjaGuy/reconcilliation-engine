@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+cryptography
+pydantic
+pandas
+numpy
+pymongo
+oracledb

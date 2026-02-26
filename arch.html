@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Reconciliation Orchestration Engine - Internal Architecture</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        background: #f5f7fb;
+        margin: 0;
+        padding: 24px;
+        color: #1f2933;
+      }
+
+      h1 {
+        text-align: center;
+        margin-bottom: 8px;
+      }
+
+      h2 {
+        text-align: center;
+        margin-top: 0;
+        font-weight: 500;
+        color: #52606d;
+      }
+
+      .legend {
+        max-width: 960px;
+        margin: 0 auto 16px auto;
+        font-size: 13px;
+        color: #52606d;
+        text-align: center;
+      }
+
+      .diagram {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+        padding: 20px 24px 24px 24px;
+        box-sizing: border-box;
+      }
+
+      .row {
+        display: flex;
+        justify-content: center;
+        align-items: stretch;
+        gap: 16px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+
+      .box {
+        border-radius: 8px;
+        border: 1px solid #d8e2f2;
+        background: #f9fbff;
+        padding: 8px 10px;
+        box-sizing: border-box;
+        font-size: 12px;
+        min-width: 160px;
+      }
+
+      .box-title {
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 4px;
+        color: #102a43;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .box-body {
+        font-size: 11px;
+        line-height: 1.4;
+        color: #52606d;
+      }
+
+      .engine {
+        border-radius: 10px;
+        border: 1.5px solid #4c6fff;
+        background: linear-gradient(135deg, #eef2ff, #ffffff);
+        padding: 12px;
+        box-sizing: border-box;
+      }
+
+      .engine-title {
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: #253858;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .engine-section-title {
+        font-size: 11px;
+        font-weight: 600;
+        margin: 6px 0 4px 0;
+        color: #52606d;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .engine-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+      }
+
+      .engine-box {
+        flex: 1 1 160px;
+        border-radius: 6px;
+        border: 1px solid #c3d0f6;
+        background: #ffffff;
+        padding: 6px 8px;
+        box-sizing: border-box;
+        font-size: 11px;
+      }
+
+      .engine-box-title {
+        font-weight: 600;
+        margin-bottom: 2px;
+        color: #253858;
+      }
+
+      .engine-box-body {
+        font-size: 10px;
+        line-height: 1.35;
+        color: #52606d;
+      }
+
+      .arrow {
+        text-align: center;
+        font-size: 12px;
+        color: #9fb3c8;
+        margin: 2px 0;
+      }
+
+      .arrow span {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: #e4ecf7;
+        color: #52606d;
+        font-size: 10px;
+        margin-top: 2px;
+      }
+
+      .small {
+        font-size: 10px;
+      }
+
+      .pill {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: #e5f4ff;
+        color: #035388;
+        font-size: 10px;
+        margin-top: 2px;
+      }
+
+      .group-title {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: #52606d;
+        margin-bottom: 4px;
+        text-align: center;
+      }
+
+      .spacer {
+        height: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Reconciliation Orchestration Engine</h1>
+    <h2>Internal Components, APIs and Integrations</h2>
+    <div class="legend">
+      High-level view of how the Reconciliation Orchestration Engine receives
+      API calls, builds execution plans, coordinates batches, and integrates
+      with schema inference, extraction, matching, comparison, and results
+      storage.
+    </div>
+
+    <div class="diagram">
+      <!-- TOP: REST API LAYER -->
+      <div class="group-title">Northbound APIs</div>
+      <div class="row">
+        <div class="box" style="min-width: 260px">
+          <div class="box-title">REST API Layer</div>
+          <div class="box-body">
+            <strong>Jobs API</strong>:
+            <span class="small"
+              >POST /api/v1/jobs, POST /api/v1/jobs/{id}/cancel, GET
+              /api/v1/jobs/{id}</span
+            ><br />
+            <strong>RuleSets API</strong>:
+            <span class="small">manage reconciliation configs</span><br />
+            <strong>Results API</strong>:
+            <span class="small">GET /api/v1/results/{job_id}/*</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">▼ <span>API calls (start, cancel, status)</span></div>
+
+      <!-- ENGINE BOX -->
+      <div class="engine">
+        <div class="engine-title">Reconciliation Orchestration Engine</div>
+
+        <!-- Section 1: Northbound Interface -->
+        <div class="engine-section-title">1. Northbound Interface</div>
+        <div class="engine-row">
+          <div class="engine-box">
+            <div class="engine-box-title">Job Submission Facade</div>
+            <div class="engine-box-body">
+              Entry point for Jobs API calls. Validates inputs (rule_set_id,
+              dataset ids, mappings) against metadata. Delegates to Run Context
+              Builder.
+            </div>
+          </div>
+          <div class="engine-box">
+            <div class="engine-box-title">Run Context Builder</div>
+            <div class="engine-box-body">
+              Hydrates <strong>RunContext</strong> with resolved systems,
+              datasets, mappings, rule set and execution options (batch size,
+              parallelism, timeouts).
+            </div>
+          </div>
+          <div class="engine-box">
+            <div class="engine-box-title">Run Registry</div>
+            <div class="engine-box-body">
+              Creates <strong>ReconciliationRun</strong> records, assigns
+              <code>run_id</code>, sets initial status (PENDING), and persists
+              to metadata DB.
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Core Orchestration Services -->
+        <div class="engine-section-title">2. Core Orchestration Services</div>
+        <div class="engine-row">
+          <div class="engine-box">
+            <div class="engine-box-title">Plan Builder</div>
+            <div class="engine-box-body">
+              Derives <strong>ExecutionPlan</strong> from RuleSet, Mappings, and
+              Datasets. Defines ordered steps per dataset pair: schema
+              inference, extraction, matching, comparison, persist results.
+            </div>
+          </div>
+          <div class="engine-box">
+            <div class="engine-box-title">Execution Controller</div>
+            <div class="engine-box-body">
+              Main state machine for a run. Drives plan steps and transitions:
+              PENDING → RUNNING → COMPLETED / FAILED / CANCELLED. Coordinates
+              batches and step lifecycle.
+            </div>
+          </div>
+          <div class="engine-box">
+            <div class="engine-box-title">Progress Tracker</div>
+            <div class="engine-box-body">
+              Tracks counts for total, processed, matched, unmatched and
+              discrepancies. Exposes snapshots for <code>GET /jobs/{id}</code>.
+            </div>
+          </div>
+          <div class="engine-box">
+            <div class="engine-box-title">Error & Retry Manager</div>
+            <div class="engine-box-body">
+              Classifies errors (transient vs fatal), applies retry policies
+              (max attempts, backoff), decides when to abort or continue with
+              warnings.
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: Execution & Coordination -->
+        <div class="engine-section-title">
+          3. Execution & Coordination Layer
+        </div>
+        <div class="engine-row">
+          <div class="engine-box">
+            <div class="engine-box-title">Batch Orchestrator</div>
+            <div class="engine-box-body">
+              Splits work into <strong>BatchContext</strong> units (e.g. 10k
+              records). For each dataset pair, coordinates source/target
+              extraction and routes record streams to matching.
+            </div>
+          </div>
+          <div class="engine-box">
+            <div class="engine-box-title">Task Dispatcher</div>
+            <div class="engine-box-body">
+              Dispatches batch tasks to workers (in-process async/thread pool;
+              pluggable queue in future). Enforces concurrency limits and tracks
+              active tasks.
+            </div>
+          </div>
+        </div>
+
+        <div class="engine-row">
+          <div class="engine-box">
+            <div class="engine-box-title">SchemaInferenceAdapter</div>
+            <div class="engine-box-body">
+              Integration wrapper around OracleSchemaInferrer and
+              MongoDBSchemaInferrer. Executes schema steps referenced in
+              ExecutionPlan.
+            </div>
+          </div>
+          <div class="engine-box">
+            <div class="engine-box-title">ExtractionAdapter</div>
+            <div class="engine-box-body">
+              Wraps OracleDataExtractor and MongoDBDataExtractor. Applies
+              filters, paging and transformations; returns iterators/streams to
+              Batch Orchestrator.
+            </div>
+          </div>
+          <div class="engine-box">
+            <div class="engine-box-title">MatchingAdapter</div>
+            <div class="engine-box-body">
+              Wraps MatchingEngine.match_records(...). Uses configured matching
+              keys to produce matched/unmatched sets for each batch.
+            </div>
+          </div>
+          <div class="engine-box">
+            <div class="engine-box-title">ComparisonAdapter</div>
+            <div class="engine-box-body">
+              Uses FieldMappingService and comparators to compare fields for
+              matched pairs. Routes discrepancies and stats to
+              ResultsRepository.
+            </div>
+          </div>
+        </div>
+
+        <!-- Shared Models -->
+        <div class="engine-section-title">Shared Internal Models</div>
+        <div class="engine-row">
+          <div class="engine-box">
+            <div class="engine-box-title">RunContext</div>
+            <div class="engine-box-body">
+              Per-run context: run_id, job_id, rule_set, mappings, datasets,
+              execution options. Passed across engine components.
+            </div>
+          </div>
+          <div class="engine-box">
+            <div class="engine-box-title">ExecutionPlan</div>
+            <div class="engine-box-body">
+              Step graph for reconciliation: ordered and dependent steps per
+              dataset pair. Drives Execution Controller behaviour.
+            </div>
+          </div>
+          <div class="engine-box">
+            <div class="engine-box-title">BatchContext</div>
+            <div class="engine-box-body">
+              Per-batch metadata: batch_id, dataset pair, paging/window bounds.
+              Used by Batch Orchestrator and Task Dispatcher.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ENGINE → DOWNSTREAM SERVICES -->
+      <div class="arrow">▼ <span>Integration via Adapters</span></div>
+
+      <div class="group-title">Downstream Services and Stores</div>
+      <div class="row">
+        <div class="box">
+          <div class="box-title">Schema Inference Service</div>
+          <div class="box-body">
+            OracleSchemaInferrer, MongoDBSchemaInferrer<br />
+            <span class="pill">Schemas API</span>
+          </div>
+        </div>
+        <div class="box">
+          <div class="box-title">Data Extraction Service</div>
+          <div class="box-body">
+            OracleDataExtractor, MongoDBDataExtractor<br />
+            <span class="pill">Datasets API</span>
+          </div>
+        </div>
+        <div class="box">
+          <div class="box-title">Matching Engine</div>
+          <div class="box-body">
+            Hash-based & composite-key matching over streamed batches.
+          </div>
+        </div>
+        <div class="box">
+          <div class="box-title">Comparison & Results Storage</div>
+          <div class="box-body">
+            FieldMappingService, Comparators, ResultsRepository<br />
+            <span class="pill">Results API</span>
+          </div>
+        </div>
+        <div class="box">
+          <div class="box-title">Metadata DB (PostgreSQL)</div>
+          <div class="box-body">
+            Systems, Schemas, Datasets, Mappings, RuleSets,<br />
+            ReconciliationRuns, FieldDiscrepancies.
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

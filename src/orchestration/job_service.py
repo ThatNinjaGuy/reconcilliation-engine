@@ -191,14 +191,20 @@ class JobService:
                     }
                     for cr in comparison_rules
                 ]
-                matching_keys = rule_set.matching_keys
-                if isinstance(matching_keys, dict) and "keys" in matching_keys:
-                    matching_keys = matching_keys["keys"]
+                matching_config: Dict[str, Any] = {
+                    "matching_keys": rule_set.matching_keys,
+                    "matching_strategy": rule_set.matching_strategy,
+                }
+                if isinstance(rule_set.matching_keys, dict):
+                    mk = rule_set.matching_keys
+                    if "keys" in mk:
+                        matching_config["matching_keys"] = mk["keys"]
+                    if "key_normalization" in mk:
+                        matching_config["key_normalization"] = mk["key_normalization"]
                 recon_engine = ReconciliationEngine(
                     rule_set={
                         "rule_set_id": rule_set.rule_set_id,
-                        "matching_keys": matching_keys,
-                        "matching_strategy": rule_set.matching_strategy,
+                        **matching_config,
                     },
                     target_schema=target_schema.fields,
                     comparison_rules=comparison_rule_payloads,

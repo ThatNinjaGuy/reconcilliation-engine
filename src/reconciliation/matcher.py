@@ -113,6 +113,8 @@ class RecordMatcher:
 
     def _extract_matching_key(self, row: CanonicalRow, side: str) -> str:
         key_parts = []
+        norm = self.matching_config.get("key_normalization", {})
+        trim_whitespace = norm.get("trim_whitespace", False)
         for key_config in self.matching_keys:
             field_name = key_config[f"{side}_field"]
             is_case_sensitive = key_config.get("is_case_sensitive", True)
@@ -121,6 +123,8 @@ class RecordMatcher:
                 value = ""
             else:
                 value = str(value)
+                if trim_whitespace:
+                    value = value.strip()
                 if not is_case_sensitive:
                     value = value.lower()
             key_parts.append(value)

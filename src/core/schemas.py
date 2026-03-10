@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class SystemType(str, Enum):
@@ -127,7 +127,11 @@ class DatasetBase(BaseModel):
     dataset_type: DatasetType
     partition_config: Optional[Dict[str, Any]] = None
     filter_config: Optional[Dict[str, Any]] = None
-    dataset_metadata: Optional[Dict[str, Any]] = Field(default=None, alias="metadata")
+    dataset_metadata: Optional[Dict[str, Any]] = Field(
+        default=None,
+        validation_alias=AliasChoices("dataset_metadata", "metadata"),
+        serialization_alias="metadata",
+    )
     is_active: bool = True
 
     model_config = ConfigDict(populate_by_name=True)
@@ -142,7 +146,11 @@ class DatasetUpdate(BaseModel):
     physical_name: Optional[str] = None
     partition_config: Optional[Dict[str, Any]] = None
     filter_config: Optional[Dict[str, Any]] = None
-    dataset_metadata: Optional[Dict[str, Any]] = Field(default=None, alias="metadata")
+    dataset_metadata: Optional[Dict[str, Any]] = Field(
+        default=None,
+        validation_alias=AliasChoices("dataset_metadata", "metadata"),
+        serialization_alias="metadata",
+    )
     is_active: Optional[bool] = None
 
     model_config = ConfigDict(populate_by_name=True)

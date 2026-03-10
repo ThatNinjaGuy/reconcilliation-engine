@@ -1,0 +1,6 @@
+[
+  {"id": "1", "name": "Alice", "amount": 100.50, "status": "active"},
+  {"id": "2", "name": "Bob", "amount": 250.75, "status": "active"},
+  {"id": "3", "name": "Carol", "amount": 99.00, "status": "inactive"},
+  {"id": "4", "name": "Dave", "amount": 500.25, "status": "active"}
+]

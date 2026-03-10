@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import Any, Dict, Type
 
 from .base import DatasetReader
-from .oracle_reader import OracleDatasetReader
+from .file_reader import FileDatasetReader
 from .mongo_reader import MongoDatasetReader
+from .oracle_reader import OracleDatasetReader
 
 
 class ConnectorFactory:
@@ -15,6 +16,7 @@ class ConnectorFactory:
     _readers: Dict[str, Type[DatasetReader]] = {
         "ORACLE": OracleDatasetReader,
         "MONGODB": MongoDatasetReader,
+        "FILE": FileDatasetReader,
     }
 
     @classmethod

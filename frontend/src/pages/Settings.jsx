@@ -20,7 +20,7 @@ export default function Settings() {
       <div className="page-head">
         <div>
           <h1>Settings</h1>
-          <p className="muted">Configure your connection to the GenRecon backend.</p>
+          <p className="muted">Configure your connection to the Syncora backend.</p>
         </div>
       </div>
 
@@ -29,7 +29,7 @@ export default function Settings() {
 
         <label className="field">
           <span>Base URL</span>
-          <span className="help-text">The URL where the GenRecon API server is running.</span>
+          <span className="help-text">The URL where the Syncora API server is running.</span>
           <input
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}

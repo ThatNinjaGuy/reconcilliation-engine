@@ -7,6 +7,7 @@ import FilterConfigForm from "../components/FilterConfigForm.jsx";
 import MatchingKeyBuilder from "../components/MatchingKeyBuilder.jsx";
 import ComparisonRuleBuilder from "../components/ComparisonRuleBuilder.jsx";
 import HelpText from "../components/HelpText.jsx";
+import MappingBuilder from "../components/MappingBuilder.jsx";
 
 const TABS = [
   { key: "systems", label: "Systems", endpoint: "/api/v1/systems", idField: "system_id", nameField: "system_name", typeField: "system_type" },
@@ -899,12 +900,30 @@ export default function Configs() {
   const [activeTab, setActiveTab] = useState("systems");
   const tab = TABS.find((t) => t.key === activeTab);
   const [ruleSets, setRuleSets] = useState([]);
+  const [systems, setSystems] = useState([]);
+  const [schemas, setSchemas] = useState([]);
+  const [datasets, setDatasets] = useState([]);
+  const [mappings, setMappings] = useState([]);
   const [selectedRuleSetId, setSelectedRuleSetId] = useState("");
   const [running, setRunning] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createDraft, setCreateDraft] = useState(null);
 
   useEffect(() => {
-    request("/api/v1/rule-sets", {}, { toast: false })
-      .then((rs) => setRuleSets(Array.isArray(rs) ? rs : []))
+    Promise.all([
+      request("/api/v1/rule-sets", {}, { toast: false }),
+      request("/api/v1/systems", {}, { toast: false }),
+      request("/api/v1/schemas", {}, { toast: false }),
+      request("/api/v1/datasets", {}, { toast: false }),
+      request("/api/v1/mappings", {}, { toast: false }),
+    ])
+      .then(([rs, sys, sch, ds, mp]) => {
+        setRuleSets(Array.isArray(rs) ? rs : []);
+        setSystems(Array.isArray(sys) ? sys : []);
+        setSchemas(Array.isArray(sch) ? sch : []);
+        setDatasets(Array.isArray(ds) ? ds : []);
+        setMappings(Array.isArray(mp) ? mp : []);
+      })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -922,6 +941,181 @@ export default function Configs() {
     } finally {
       setRunning(false);
     }
+  };
+
+  const singular = useMemo(() => {
+    const map = {
+      systems: "System",
+      schemas: "Schema",
+      datasets: "Dataset",
+      mappings: "Mapping",
+      reference_datasets: "Reference Dataset",
+      rule_sets: "Rule Set",
+    };
+    return map[tab.key] || "Item";
+  }, [tab.key]);
+
+  const openCreate = () => {
+    setCreateOpen(true);
+    if (tab.key === "systems") {
+      setCreateDraft({
+        system_id: "",
+        system_name: "",
+        system_type: "FILE",
+        description: "",
+        connection_config: { base_path: "" },
+      });
+    } else if (tab.key === "schemas") {
+      setCreateDraft({
+        schema_id: "",
+        schema_name: "",
+        _fieldBuilderRows: [emptyField()],
+      });
+    } else if (tab.key === "datasets") {
+      setCreateDraft({
+        dataset_id: "",
+        dataset_name: "",
+        system_id: systems[0]?.system_id || "",
+        schema_id: schemas[0]?.schema_id || "",
+        physical_name: "",
+        dataset_type: "FILE",
+        filter_config: { has_header: true },
+        metadata: {},
+      });
+    } else if (tab.key === "mappings") {
+      setCreateDraft({
+        mapping_id: "",
+        mapping_name: "",
+        source_schema_id: schemas[0]?.schema_id || "",
+        target_schema_id: schemas[0]?.schema_id || "",
+        description: "",
+        _fieldMappings: [{ target_field_id: "", source_expression: "" }],
+      });
+    } else if (tab.key === "reference_datasets") {
+      setCreateDraft({
+        reference_dataset_id: "",
+        reference_name: "",
+        description: "",
+        source_type: "file",
+        source_config: {},
+        key_fields: {},
+        value_fields: null,
+        cache_config: null,
+        refresh_schedule: "",
+      });
+    } else if (tab.key === "rule_sets") {
+      setCreateDraft({
+        rule_set_id: "",
+        rule_set_name: "",
+        source_dataset_id: datasets[0]?.dataset_id || "",
+        target_dataset_id: datasets[0]?.dataset_id || "",
+        mapping_id: mappings[0]?.mapping_id || "",
+        matching_strategy: "EXACT",
+        _matchingKeys: [{ source_field: "id", target_field: "id", is_case_sensitive: false }],
+        _trimWhitespace: true,
+        _comparisonRules: [],
+      });
+    } else {
+      setCreateDraft({});
+    }
+  };
+
+  const closeCreate = () => {
+    setCreateOpen(false);
+    setCreateDraft(null);
+  };
+
+  const saveCreate = async () => {
+    if (!createDraft) return;
+    if (tab.key === "systems") {
+      await request(tab.endpoint, { method: "POST", body: JSON.stringify(createDraft) }, { successMessage: "System created" });
+    }
+    if (tab.key === "schemas") {
+      const payload = {
+        schema_id: createDraft.schema_id,
+        schema_name: createDraft.schema_name,
+        fields: fieldBuilderToSchemaFields(createDraft._fieldBuilderRows),
+        constraints: {},
+      };
+      await request(tab.endpoint, { method: "POST", body: JSON.stringify(payload) }, { successMessage: "Schema created" });
+    }
+    if (tab.key === "datasets") {
+      const payload = {
+        dataset_id: createDraft.dataset_id,
+        dataset_name: createDraft.dataset_name,
+        system_id: createDraft.system_id,
+        schema_id: createDraft.schema_id,
+        physical_name: createDraft.physical_name,
+        dataset_type: createDraft.dataset_type,
+        filter_config: createDraft.filter_config || {},
+        metadata: createDraft.metadata || {},
+      };
+      await request(tab.endpoint, { method: "POST", body: JSON.stringify(payload) }, { successMessage: "Dataset created" });
+    }
+    if (tab.key === "mappings") {
+      const payload = {
+        mapping_id: createDraft.mapping_id,
+        mapping_name: createDraft.mapping_name,
+        source_schema_id: createDraft.source_schema_id,
+        target_schema_id: createDraft.target_schema_id,
+        description: createDraft.description,
+      };
+      await request(tab.endpoint, { method: "POST", body: JSON.stringify(payload) }, { successMessage: "Mapping created" });
+      for (const fm of createDraft._fieldMappings || []) {
+        if (!fm.target_field_id) continue;
+        await request(`/api/v1/mappings/${createDraft.mapping_id}/field-mappings`, {
+          method: "POST",
+          body: JSON.stringify({
+            mapping_id: createDraft.mapping_id,
+            target_field_id: fm.target_field_id,
+            source_expression: fm.source_expression,
+            transform_chain: { steps: [] },
+            pre_validations: { validations: [] },
+            post_validations: { validations: [] },
+            is_active: true,
+          }),
+        }, { toast: false });
+      }
+    }
+    if (tab.key === "reference_datasets") {
+      await request(tab.endpoint, { method: "POST", body: JSON.stringify(createDraft) }, { successMessage: "Reference dataset created" });
+    }
+    if (tab.key === "rule_sets") {
+      const mk = {
+        keys: createDraft._matchingKeys || [],
+        key_normalization: { trim_whitespace: createDraft._trimWhitespace || false },
+      };
+      const payload = {
+        rule_set_id: createDraft.rule_set_id,
+        rule_set_name: createDraft.rule_set_name,
+        source_dataset_id: createDraft.source_dataset_id,
+        target_dataset_id: createDraft.target_dataset_id,
+        mapping_id: createDraft.mapping_id,
+        matching_strategy: createDraft.matching_strategy,
+        matching_keys: mk,
+        scope_config: {},
+        tolerance_config: {},
+      };
+      await request(tab.endpoint, { method: "POST", body: JSON.stringify(payload) }, { successMessage: "Rule set created" });
+      for (const r of createDraft._comparisonRules || []) {
+        if (!r.target_field_id) continue;
+        await request(`/api/v1/rule-sets/${createDraft.rule_set_id}/comparison-rules`, {
+          method: "POST",
+          body: JSON.stringify({
+            rule_set_id: createDraft.rule_set_id,
+            target_field_id: r.target_field_id,
+            comparator_type: r.comparator_type,
+            comparator_params: r.comparator_params || {},
+            ignore_field: Boolean(r.ignore_field),
+          }),
+        }, { toast: false });
+      }
+    }
+
+    // Refresh lists and close
+    closeCreate();
+    // soft refresh of cached lists
+    request(tab.endpoint, {}, { toast: false }).catch(() => {});
   };
 
   return (
@@ -977,6 +1171,184 @@ export default function Configs() {
       </div>
 
       <div className="card">
+        <div className="page-head" style={{ marginBottom: 12 }}>
+          <div>
+            <h3 style={{ margin: 0 }}>{tab.label}</h3>
+            <p className="muted" style={{ margin: 0 }}>
+              Manage {tab.label.toLowerCase()} (view, edit, delete).
+            </p>
+          </div>
+          <div className="actions">
+            <button
+              type="button"
+              className="button"
+              onClick={() => (createOpen ? closeCreate() : openCreate())}
+            >
+              {createOpen ? "Close" : `+ Add ${singular}`}
+            </button>
+          </div>
+        </div>
+
+        {createOpen && createDraft ? (
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <h3 style={{ margin: 0 }}>Add {singular}</h3>
+              <div className="actions">
+                <button type="button" className="button button-secondary" onClick={closeCreate}>Cancel</button>
+                <button type="button" onClick={saveCreate}>Create</button>
+              </div>
+            </div>
+
+            {tab.key === "systems" ? (
+              <>
+                <div className="form-grid">
+                  <label className="field"><span>System ID *</span><input value={createDraft.system_id} onChange={(e)=>setCreateDraft(p=>({...p,system_id:e.target.value}))} /></label>
+                  <label className="field"><span>Name *</span><input value={createDraft.system_name} onChange={(e)=>setCreateDraft(p=>({...p,system_name:e.target.value}))} /></label>
+                  <label className="field"><span>Type *</span>
+                    <select value={createDraft.system_type} onChange={(e)=>setCreateDraft(p=>({...p,system_type:e.target.value}))}>
+                      <option value="FILE">FILE</option><option value="ORACLE">ORACLE</option><option value="MONGODB">MONGODB</option><option value="API">API</option>
+                    </select>
+                  </label>
+                  <label className="field"><span>Description</span><input value={createDraft.description} onChange={(e)=>setCreateDraft(p=>({...p,description:e.target.value}))} /></label>
+                </div>
+                <ConnectionConfigForm
+                  systemType={createDraft.system_type}
+                  value={createDraft.connection_config || {}}
+                  onChange={(cfg)=>setCreateDraft(p=>({...p,connection_config:cfg}))}
+                />
+              </>
+            ) : null}
+
+            {tab.key === "schemas" ? (
+              <>
+                <div className="form-grid">
+                  <label className="field"><span>Schema ID *</span><input value={createDraft.schema_id} onChange={(e)=>setCreateDraft(p=>({...p,schema_id:e.target.value}))} /></label>
+                  <label className="field"><span>Name *</span><input value={createDraft.schema_name} onChange={(e)=>setCreateDraft(p=>({...p,schema_name:e.target.value}))} /></label>
+                </div>
+                <FieldBuilder fields={createDraft._fieldBuilderRows} onChange={(rows)=>setCreateDraft(p=>({...p,_fieldBuilderRows:rows}))} />
+              </>
+            ) : null}
+
+            {tab.key === "datasets" ? (
+              <>
+                <div className="form-grid">
+                  <label className="field"><span>Dataset ID *</span><input value={createDraft.dataset_id} onChange={(e)=>setCreateDraft(p=>({...p,dataset_id:e.target.value}))} /></label>
+                  <label className="field"><span>Name *</span><input value={createDraft.dataset_name} onChange={(e)=>setCreateDraft(p=>({...p,dataset_name:e.target.value}))} /></label>
+                  <label className="field"><span>System *</span>
+                    <select value={createDraft.system_id} onChange={(e)=>setCreateDraft(p=>({...p,system_id:e.target.value}))}>
+                      {systems.map((s)=>(<option key={s.system_id} value={s.system_id}>{s.system_id} — {s.system_name}</option>))}
+                    </select>
+                  </label>
+                  <label className="field"><span>Schema *</span>
+                    <select value={createDraft.schema_id} onChange={(e)=>setCreateDraft(p=>({...p,schema_id:e.target.value}))}>
+                      {schemas.map((s)=>(<option key={s.schema_id} value={s.schema_id}>{s.schema_id} — {s.schema_name}</option>))}
+                    </select>
+                  </label>
+                  <label className="field"><span>Physical name *</span><input value={createDraft.physical_name} onChange={(e)=>setCreateDraft(p=>({...p,physical_name:e.target.value}))} placeholder="source.csv" /></label>
+                  <label className="field"><span>Dataset type</span>
+                    <select value={createDraft.dataset_type} onChange={(e)=>setCreateDraft(p=>({...p,dataset_type:e.target.value}))}>
+                      <option value="FILE">FILE</option><option value="TABLE">TABLE</option><option value="COLLECTION">COLLECTION</option><option value="VIEW">VIEW</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="card">
+                  <h3>Filter config</h3>
+                  <FilterConfigForm
+                    systemType={(systems.find((s)=>s.system_id===createDraft.system_id)?.system_type) || "FILE"}
+                    value={createDraft.filter_config || {}}
+                    onChange={(cfg)=>setCreateDraft(p=>({...p,filter_config:cfg}))}
+                  />
+                </div>
+              </>
+            ) : null}
+
+            {tab.key === "mappings" ? (
+              <>
+                <div className="form-grid">
+                  <label className="field"><span>Mapping ID *</span><input value={createDraft.mapping_id} onChange={(e)=>setCreateDraft(p=>({...p,mapping_id:e.target.value}))} /></label>
+                  <label className="field"><span>Name *</span><input value={createDraft.mapping_name} onChange={(e)=>setCreateDraft(p=>({...p,mapping_name:e.target.value}))} /></label>
+                  <label className="field"><span>Source schema *</span>
+                    <select value={createDraft.source_schema_id} onChange={(e)=>setCreateDraft(p=>({...p,source_schema_id:e.target.value}))}>
+                      {schemas.map((s)=>(<option key={s.schema_id} value={s.schema_id}>{s.schema_id}</option>))}
+                    </select>
+                  </label>
+                  <label className="field"><span>Target schema *</span>
+                    <select value={createDraft.target_schema_id} onChange={(e)=>setCreateDraft(p=>({...p,target_schema_id:e.target.value}))}>
+                      {schemas.map((s)=>(<option key={s.schema_id} value={s.schema_id}>{s.schema_id}</option>))}
+                    </select>
+                  </label>
+                  <label className="field"><span>Description</span><input value={createDraft.description} onChange={(e)=>setCreateDraft(p=>({...p,description:e.target.value}))} /></label>
+                </div>
+                <div className="card">
+                  <h3>Field mappings</h3>
+                  <MappingBuilder mappings={createDraft._fieldMappings || []} onChange={(m)=>setCreateDraft(p=>({...p,_fieldMappings:m}))} />
+                </div>
+              </>
+            ) : null}
+
+            {tab.key === "reference_datasets" ? (
+              <>
+                <div className="form-grid">
+                  <label className="field"><span>ID *</span><input value={createDraft.reference_dataset_id} onChange={(e)=>setCreateDraft(p=>({...p,reference_dataset_id:e.target.value}))} /></label>
+                  <label className="field"><span>Name *</span><input value={createDraft.reference_name} onChange={(e)=>setCreateDraft(p=>({...p,reference_name:e.target.value}))} /></label>
+                  <label className="field"><span>Source type *</span><input value={createDraft.source_type} onChange={(e)=>setCreateDraft(p=>({...p,source_type:e.target.value}))} placeholder="file|oracle|mongodb|inline" /></label>
+                  <label className="field"><span>Description</span><input value={createDraft.description} onChange={(e)=>setCreateDraft(p=>({...p,description:e.target.value}))} /></label>
+                </div>
+                <div className="grid two">
+                  <label className="field"><span>Source config (JSON)</span>
+                    <textarea rows={6} className="mono-input" value={JSON.stringify(createDraft.source_config||{},null,2)} onChange={(e)=>{try{setCreateDraft(p=>({...p,source_config:JSON.parse(e.target.value)}))}catch{}}} />
+                  </label>
+                  <label className="field"><span>Key fields (JSON)</span>
+                    <textarea rows={6} className="mono-input" value={JSON.stringify(createDraft.key_fields||{},null,2)} onChange={(e)=>{try{setCreateDraft(p=>({...p,key_fields:JSON.parse(e.target.value)}))}catch{}}} />
+                  </label>
+                </div>
+              </>
+            ) : null}
+
+            {tab.key === "rule_sets" ? (
+              <>
+                <div className="form-grid">
+                  <label className="field"><span>Rule set ID *</span><input value={createDraft.rule_set_id} onChange={(e)=>setCreateDraft(p=>({...p,rule_set_id:e.target.value}))} /></label>
+                  <label className="field"><span>Name *</span><input value={createDraft.rule_set_name} onChange={(e)=>setCreateDraft(p=>({...p,rule_set_name:e.target.value}))} /></label>
+                  <label className="field"><span>Source dataset *</span>
+                    <select value={createDraft.source_dataset_id} onChange={(e)=>setCreateDraft(p=>({...p,source_dataset_id:e.target.value}))}>
+                      {datasets.map((d)=>(<option key={d.dataset_id} value={d.dataset_id}>{d.dataset_id} — {d.dataset_name}</option>))}
+                    </select>
+                  </label>
+                  <label className="field"><span>Target dataset *</span>
+                    <select value={createDraft.target_dataset_id} onChange={(e)=>setCreateDraft(p=>({...p,target_dataset_id:e.target.value}))}>
+                      {datasets.map((d)=>(<option key={d.dataset_id} value={d.dataset_id}>{d.dataset_id} — {d.dataset_name}</option>))}
+                    </select>
+                  </label>
+                  <label className="field"><span>Mapping *</span>
+                    <select value={createDraft.mapping_id} onChange={(e)=>setCreateDraft(p=>({...p,mapping_id:e.target.value}))}>
+                      {mappings.map((m)=>(<option key={m.mapping_id} value={m.mapping_id}>{m.mapping_id} — {m.mapping_name}</option>))}
+                    </select>
+                  </label>
+                  <label className="field"><span>Matching strategy</span>
+                    <select value={createDraft.matching_strategy} onChange={(e)=>setCreateDraft(p=>({...p,matching_strategy:e.target.value}))}>
+                      <option value="EXACT">EXACT</option><option value="FUZZY">FUZZY</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="card">
+                  <h3>Matching keys</h3>
+                  <MatchingKeyBuilder
+                    keys={createDraft._matchingKeys || []}
+                    trimWhitespace={createDraft._trimWhitespace || false}
+                    onChange={(keys)=>setCreateDraft(p=>({...p,_matchingKeys:keys}))}
+                    onTrimChange={(tw)=>setCreateDraft(p=>({...p,_trimWhitespace:tw}))}
+                  />
+                </div>
+                <div className="card">
+                  <h3>Comparison rules (optional)</h3>
+                  <ComparisonRuleBuilder rules={createDraft._comparisonRules || []} onChange={(rules)=>setCreateDraft(p=>({...p,_comparisonRules:rules}))} />
+                </div>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
         <EntityTable tab={tab} onRunRuleSet={runRuleSet} />
       </div>
     </div>

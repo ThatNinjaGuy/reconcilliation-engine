@@ -4,17 +4,26 @@ const ConnectionContext = createContext(null);
 
 export function ConnectionProvider({ children }) {
   const [baseUrl, setBaseUrl] = useState(
-    () => localStorage.getItem("genrecon.baseUrl") || "http://localhost:8000"
+    () =>
+      localStorage.getItem("syncora.baseUrl") ||
+      localStorage.getItem("genrecon.baseUrl") ||
+      "http://localhost:8000"
   );
   const [apiKey, setApiKey] = useState(
-    () => localStorage.getItem("genrecon.apiKey") || ""
+    () =>
+      localStorage.getItem("syncora.apiKey") ||
+      localStorage.getItem("genrecon.apiKey") ||
+      ""
   );
 
   useEffect(() => {
+    // Write under new Syncora namespace, keep old key for backward compatibility.
+    localStorage.setItem("syncora.baseUrl", baseUrl);
     localStorage.setItem("genrecon.baseUrl", baseUrl);
   }, [baseUrl]);
 
   useEffect(() => {
+    localStorage.setItem("syncora.apiKey", apiKey);
     localStorage.setItem("genrecon.apiKey", apiKey);
   }, [apiKey]);
 

@@ -1,6 +1,12 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApi } from "../hooks/useApi.js";
+import ConnectionConfigForm from "../components/ConnectionConfigForm.jsx";
+import FieldBuilder, { emptyField } from "../components/FieldBuilder.jsx";
+import FilterConfigForm from "../components/FilterConfigForm.jsx";
+import MatchingKeyBuilder from "../components/MatchingKeyBuilder.jsx";
+import ComparisonRuleBuilder from "../components/ComparisonRuleBuilder.jsx";
+import HelpText from "../components/HelpText.jsx";
 
 const TABS = [
   { key: "systems", label: "Systems", endpoint: "/api/v1/systems", idField: "system_id", nameField: "system_name", typeField: "system_type" },
@@ -10,6 +16,46 @@ const TABS = [
   { key: "reference_datasets", label: "Reference Datasets", endpoint: "/api/v1/reference-datasets", idField: "reference_dataset_id", nameField: "reference_name", typeField: "source_type" },
   { key: "rule_sets", label: "Rule Sets", endpoint: "/api/v1/rule-sets", idField: "rule_set_id", nameField: "rule_set_name", typeField: "matching_strategy" },
 ];
+
+function schemaToFieldBuilder(fields) {
+  const raw = Array.isArray(fields) ? fields : fields?.fields || [];
+  if (!raw.length) return [emptyField()];
+  return raw.map((f) => {
+    const pm = f.physical_mapping || {};
+    const pmKey = Object.keys(pm)[0] || "csv_column";
+    return {
+      field_id: f.field_id || "",
+      field_name: f.field_name || "",
+      data_type: f.data_type || "STRING",
+      is_nullable: f.is_nullable !== false,
+      is_key: Boolean(f.is_key),
+      precision: f.precision ?? null,
+      scale: f.scale ?? null,
+      physical_mapping_type: pmKey,
+      physical_mapping_value: pm[pmKey] ?? "",
+    };
+  });
+}
+
+function fieldBuilderToSchemaFields(rows) {
+  return {
+    fields: (rows || []).map((r) => {
+      const out = {
+        field_id: r.field_id,
+        field_name: r.field_name,
+        data_type: r.data_type,
+        is_nullable: r.is_nullable,
+        is_key: r.is_key,
+        physical_mapping: { [r.physical_mapping_type]: r.physical_mapping_value },
+      };
+      if (r.data_type === "DECIMAL") {
+        out.precision = r.precision;
+        out.scale = r.scale;
+      }
+      return out;
+    }),
+  };
+}
 
 function KVTable({ data }) {
   const entries = Object.entries(data || {});
@@ -73,25 +119,87 @@ function SchemaFieldsTable({ schema }) {
   );
 }
 
-function DetailPanel({ tabKey, detail }) {
+function DetailPanel({
+  tabKey,
+  detail,
+  mode,
+  draft,
+  setDraft,
+  onSave,
+  onCancel,
+}) {
   if (!detail) return null;
+  const isEdit = mode === "edit";
+
+  if (isEdit && !draft) return null;
+
+  const header = (
+    <div className="actions" style={{ justifyContent: "flex-end" }}>
+      <button type="button" className="button button-secondary" onClick={onCancel}>
+        Cancel
+      </button>
+      <button type="button" onClick={onSave}>
+        Save
+      </button>
+    </div>
+  );
 
   if (tabKey === "systems") {
     return (
       <div className="card" style={{ marginTop: 10 }}>
-        <h3>System details</h3>
-        <div className="grid two">
-          <div className="card">
-            <div className="field"><span>System ID</span><div className="mono">{detail.system_id}</div></div>
-            <div className="field"><span>Name</span><div>{detail.system_name}</div></div>
-            <div className="field"><span>Type</span><div className="mono">{detail.system_type}</div></div>
-            <div className="field"><span>Description</span><div>{detail.description || "—"}</div></div>
-          </div>
-          <div className="card">
-            <div className="field"><span>Connection config</span></div>
-            <KVTable data={detail.connection_config || {}} />
-          </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <h3 style={{ margin: 0 }}>System {isEdit ? "edit" : "details"}</h3>
+          {isEdit ? header : null}
         </div>
+        {isEdit ? (
+          <>
+            <div className="form-grid">
+              <label className="field">
+                <span>System ID</span>
+                <input value={draft.system_id} disabled />
+              </label>
+              <label className="field">
+                <span>Name</span>
+                <input value={draft.system_name} onChange={(e) => setDraft((p) => ({ ...p, system_name: e.target.value }))} />
+              </label>
+              <label className="field">
+                <span>Type</span>
+                <select value={draft.system_type} onChange={(e) => setDraft((p) => ({ ...p, system_type: e.target.value }))}>
+                  <option value="FILE">FILE</option>
+                  <option value="ORACLE">ORACLE</option>
+                  <option value="MONGODB">MONGODB</option>
+                  <option value="API">API</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Description</span>
+                <input value={draft.description || ""} onChange={(e) => setDraft((p) => ({ ...p, description: e.target.value }))} />
+              </label>
+            </div>
+            <div className="card">
+              <h3>Connection config</h3>
+              <ConnectionConfigForm
+                systemType={draft.system_type}
+                value={draft.connection_config || {}}
+                onChange={(cfg) => setDraft((p) => ({ ...p, connection_config: cfg }))}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="grid two">
+            <div className="card">
+              <div className="field"><span>System ID</span><div className="mono">{detail.system_id}</div></div>
+              <div className="field"><span>Name</span><div>{detail.system_name}</div></div>
+              <div className="field"><span>Type</span><div className="mono">{detail.system_type}</div></div>
+              <div className="field"><span>Description</span><div>{detail.description || "—"}</div></div>
+            </div>
+            <div className="card">
+              <div className="field"><span>Connection config</span></div>
+              <KVTable data={detail.connection_config || {}} />
+              <HelpText>Note: sensitive fields may appear masked.</HelpText>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -99,23 +207,44 @@ function DetailPanel({ tabKey, detail }) {
   if (tabKey === "schemas") {
     return (
       <div className="card" style={{ marginTop: 10 }}>
-        <h3>Schema details</h3>
-        <div className="grid two">
-          <div className="card">
-            <div className="field"><span>Schema ID</span><div className="mono">{detail.schema_id}</div></div>
-            <div className="field"><span>Name</span><div>{detail.schema_name}</div></div>
-            <div className="field"><span>Description</span><div>{detail.description || "—"}</div></div>
-            <div className="field"><span>Version</span><div className="mono">{detail.version}</div></div>
-          </div>
-          <div className="card">
-            <div className="field"><span>Constraints</span></div>
-            <KVTable data={detail.constraints || {}} />
-          </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <h3 style={{ margin: 0 }}>Schema {isEdit ? "edit" : "details"}</h3>
+          {isEdit ? header : null}
         </div>
-        <div className="card">
-          <h3>Fields</h3>
-          <SchemaFieldsTable schema={detail} />
-        </div>
+        {isEdit ? (
+          <>
+            <div className="form-grid">
+              <label className="field">
+                <span>Schema ID</span>
+                <input value={draft.schema_id} disabled />
+              </label>
+              <label className="field">
+                <span>Name</span>
+                <input value={draft.schema_name} onChange={(e) => setDraft((p) => ({ ...p, schema_name: e.target.value }))} />
+              </label>
+            </div>
+            <FieldBuilder fields={draft._fieldBuilderRows} onChange={(rows) => setDraft((p) => ({ ...p, _fieldBuilderRows: rows }))} />
+          </>
+        ) : (
+          <>
+            <div className="grid two">
+              <div className="card">
+                <div className="field"><span>Schema ID</span><div className="mono">{detail.schema_id}</div></div>
+                <div className="field"><span>Name</span><div>{detail.schema_name}</div></div>
+                <div className="field"><span>Description</span><div>{detail.description || "—"}</div></div>
+                <div className="field"><span>Version</span><div className="mono">{detail.version}</div></div>
+              </div>
+              <div className="card">
+                <div className="field"><span>Constraints</span></div>
+                <KVTable data={detail.constraints || {}} />
+              </div>
+            </div>
+            <div className="card">
+              <h3>Fields</h3>
+              <SchemaFieldsTable schema={detail} />
+            </div>
+          </>
+        )}
       </div>
     );
   }
@@ -123,23 +252,71 @@ function DetailPanel({ tabKey, detail }) {
   if (tabKey === "datasets") {
     return (
       <div className="card" style={{ marginTop: 10 }}>
-        <h3>Dataset details</h3>
-        <div className="grid two">
-          <div className="card">
-            <div className="field"><span>Dataset ID</span><div className="mono">{detail.dataset_id}</div></div>
-            <div className="field"><span>Name</span><div>{detail.dataset_name}</div></div>
-            <div className="field"><span>System ID</span><div className="mono">{detail.system_id}</div></div>
-            <div className="field"><span>Schema ID</span><div className="mono">{detail.schema_id}</div></div>
-            <div className="field"><span>Physical name</span><div className="mono">{detail.physical_name}</div></div>
-            <div className="field"><span>Type</span><div className="mono">{detail.dataset_type}</div></div>
-          </div>
-          <div className="card">
-            <div className="field"><span>Filter config</span></div>
-            <KVTable data={detail.filter_config || {}} />
-            <div className="field" style={{ marginTop: 10 }}><span>Metadata</span></div>
-            <KVTable data={detail.metadata || {}} />
-          </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <h3 style={{ margin: 0 }}>Dataset {isEdit ? "edit" : "details"}</h3>
+          {isEdit ? header : null}
         </div>
+        {isEdit ? (
+          <>
+            <div className="form-grid">
+              <label className="field">
+                <span>Dataset ID</span>
+                <input value={draft.dataset_id} disabled />
+              </label>
+              <label className="field">
+                <span>Name</span>
+                <input
+                  value={draft.dataset_name}
+                  onChange={(e) => setDraft((p) => ({ ...p, dataset_name: e.target.value }))}
+                />
+              </label>
+              <label className="field">
+                <span>System ID</span>
+                <input value={draft.system_id} disabled />
+              </label>
+              <label className="field">
+                <span>Schema ID</span>
+                <input value={draft.schema_id} disabled />
+              </label>
+              <label className="field">
+                <span>Physical name</span>
+                <input
+                  value={draft.physical_name}
+                  onChange={(e) => setDraft((p) => ({ ...p, physical_name: e.target.value }))}
+                />
+              </label>
+              <label className="field">
+                <span>Type</span>
+                <input value={draft.dataset_type} disabled />
+              </label>
+            </div>
+            <div className="card">
+              <h3>Filter config</h3>
+              <FilterConfigForm
+                systemType="FILE"
+                value={draft.filter_config || {}}
+                onChange={(cfg) => setDraft((p) => ({ ...p, filter_config: cfg }))}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="grid two">
+            <div className="card">
+              <div className="field"><span>Dataset ID</span><div className="mono">{detail.dataset_id}</div></div>
+              <div className="field"><span>Name</span><div>{detail.dataset_name}</div></div>
+              <div className="field"><span>System ID</span><div className="mono">{detail.system_id}</div></div>
+              <div className="field"><span>Schema ID</span><div className="mono">{detail.schema_id}</div></div>
+              <div className="field"><span>Physical name</span><div className="mono">{detail.physical_name}</div></div>
+              <div className="field"><span>Type</span><div className="mono">{detail.dataset_type}</div></div>
+            </div>
+            <div className="card">
+              <div className="field"><span>Filter config</span></div>
+              <KVTable data={detail.filter_config || {}} />
+              <div className="field" style={{ marginTop: 10 }}><span>Metadata</span></div>
+              <KVTable data={detail.metadata || {}} />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -147,39 +324,74 @@ function DetailPanel({ tabKey, detail }) {
   if (tabKey === "mappings") {
     return (
       <div className="card" style={{ marginTop: 10 }}>
-        <h3>Mapping details</h3>
-        <div className="grid two">
-          <div className="card">
-            <div className="field"><span>Mapping ID</span><div className="mono">{detail.mapping_id}</div></div>
-            <div className="field"><span>Name</span><div>{detail.mapping_name}</div></div>
-            <div className="field"><span>Source schema</span><div className="mono">{detail.source_schema_id}</div></div>
-            <div className="field"><span>Target schema</span><div className="mono">{detail.target_schema_id}</div></div>
-            <div className="field"><span>Description</span><div>{detail.description || "—"}</div></div>
-          </div>
-          <div className="card">
-            <div className="field"><span>Field mappings</span></div>
-            {Array.isArray(detail.field_mappings) && detail.field_mappings.length ? (
-              <div className="table-wrap">
-                <table className="table">
-                  <thead>
-                    <tr><th>Target field</th><th>Source expression</th><th>Active</th></tr>
-                  </thead>
-                  <tbody>
-                    {detail.field_mappings.map((fm) => (
-                      <tr key={fm.field_mapping_id}>
-                        <td className="mono">{fm.target_field_id}</td>
-                        <td className="mono">{fm.source_expression || "—"}</td>
-                        <td>{fm.is_active === false ? "No" : "Yes"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="muted" style={{ margin: 0 }}>No field mappings.</p>
-            )}
-          </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <h3 style={{ margin: 0 }}>Mapping {isEdit ? "edit" : "details"}</h3>
+          {isEdit ? header : null}
         </div>
+        {isEdit ? (
+          <>
+            <div className="form-grid">
+              <label className="field">
+                <span>Mapping ID</span>
+                <input value={draft.mapping_id} disabled />
+              </label>
+              <label className="field">
+                <span>Name</span>
+                <input
+                  value={draft.mapping_name}
+                  onChange={(e) => setDraft((p) => ({ ...p, mapping_name: e.target.value }))}
+                />
+              </label>
+              <label className="field">
+                <span>Description</span>
+                <input
+                  value={draft.description || ""}
+                  onChange={(e) => setDraft((p) => ({ ...p, description: e.target.value }))}
+                />
+              </label>
+            </div>
+            <div className="card">
+              <h3>Field mappings</h3>
+              <MappingBuilder
+                mappings={draft._fieldMappings || []}
+                onChange={(m) => setDraft((p) => ({ ...p, _fieldMappings: m }))}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="grid two">
+            <div className="card">
+              <div className="field"><span>Mapping ID</span><div className="mono">{detail.mapping_id}</div></div>
+              <div className="field"><span>Name</span><div>{detail.mapping_name}</div></div>
+              <div className="field"><span>Source schema</span><div className="mono">{detail.source_schema_id}</div></div>
+              <div className="field"><span>Target schema</span><div className="mono">{detail.target_schema_id}</div></div>
+              <div className="field"><span>Description</span><div>{detail.description || "—"}</div></div>
+            </div>
+            <div className="card">
+              <div className="field"><span>Field mappings</span></div>
+              {Array.isArray(detail.field_mappings) && detail.field_mappings.length ? (
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr><th>Target field</th><th>Source expression</th><th>Active</th></tr>
+                    </thead>
+                    <tbody>
+                      {detail.field_mappings.map((fm) => (
+                        <tr key={fm.field_mapping_id}>
+                          <td className="mono">{fm.target_field_id}</td>
+                          <td className="mono">{fm.source_expression || "—"}</td>
+                          <td>{fm.is_active === false ? "No" : "Yes"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="muted" style={{ margin: 0 }}>No field mappings.</p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -187,21 +399,85 @@ function DetailPanel({ tabKey, detail }) {
   if (tabKey === "reference_datasets") {
     return (
       <div className="card" style={{ marginTop: 10 }}>
-        <h3>Reference dataset details</h3>
-        <div className="grid two">
-          <div className="card">
-            <div className="field"><span>ID</span><div className="mono">{detail.reference_dataset_id}</div></div>
-            <div className="field"><span>Name</span><div>{detail.reference_name}</div></div>
-            <div className="field"><span>Source type</span><div className="mono">{detail.source_type}</div></div>
-            <div className="field"><span>Description</span><div>{detail.description || "—"}</div></div>
-          </div>
-          <div className="card">
-            <div className="field"><span>Source config</span></div>
-            <KVTable data={detail.source_config || {}} />
-            <div className="field" style={{ marginTop: 10 }}><span>Key fields</span></div>
-            <KVTable data={detail.key_fields || {}} />
-          </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <h3 style={{ margin: 0 }}>Reference dataset {isEdit ? "edit" : "details"}</h3>
+          {isEdit ? header : null}
         </div>
+        {isEdit ? (
+          <>
+            <div className="form-grid">
+              <label className="field">
+                <span>ID</span>
+                <input value={draft.reference_dataset_id} disabled />
+              </label>
+              <label className="field">
+                <span>Name</span>
+                <input
+                  value={draft.reference_name}
+                  onChange={(e) => setDraft((p) => ({ ...p, reference_name: e.target.value }))}
+                />
+              </label>
+              <label className="field">
+                <span>Source type</span>
+                <input value={draft.source_type} disabled />
+              </label>
+              <label className="field">
+                <span>Description</span>
+                <input
+                  value={draft.description || ""}
+                  onChange={(e) => setDraft((p) => ({ ...p, description: e.target.value }))}
+                />
+              </label>
+            </div>
+            <div className="grid two" style={{ marginTop: 10 }}>
+              <label className="field">
+                <span>Source config (JSON)</span>
+                <textarea
+                  rows={6}
+                  className="mono-input"
+                  value={JSON.stringify(draft.source_config || {}, null, 2)}
+                  onChange={(e) => {
+                    try {
+                      setDraft((p) => ({ ...p, source_config: JSON.parse(e.target.value) }));
+                    } catch {
+                      //
+                    }
+                  }}
+                />
+              </label>
+              <label className="field">
+                <span>Key fields (JSON)</span>
+                <textarea
+                  rows={6}
+                  className="mono-input"
+                  value={JSON.stringify(draft.key_fields || {}, null, 2)}
+                  onChange={(e) => {
+                    try {
+                      setDraft((p) => ({ ...p, key_fields: JSON.parse(e.target.value) }));
+                    } catch {
+                      //
+                    }
+                  }}
+                />
+              </label>
+            </div>
+          </>
+        ) : (
+          <div className="grid two">
+            <div className="card">
+              <div className="field"><span>ID</span><div className="mono">{detail.reference_dataset_id}</div></div>
+              <div className="field"><span>Name</span><div>{detail.reference_name}</div></div>
+              <div className="field"><span>Source type</span><div className="mono">{detail.source_type}</div></div>
+              <div className="field"><span>Description</span><div>{detail.description || "—"}</div></div>
+            </div>
+            <div className="card">
+              <div className="field"><span>Source config</span></div>
+              <KVTable data={detail.source_config || {}} />
+              <div className="field" style={{ marginTop: 10 }}><span>Key fields</span></div>
+              <KVTable data={detail.key_fields || {}} />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -209,54 +485,106 @@ function DetailPanel({ tabKey, detail }) {
   if (tabKey === "rule_sets") {
     return (
       <div className="card" style={{ marginTop: 10 }}>
-        <h3>Rule set details</h3>
-        <div className="grid two">
-          <div className="card">
-            <div className="field"><span>Rule set ID</span><div className="mono">{detail.rule_set_id}</div></div>
-            <div className="field"><span>Name</span><div>{detail.rule_set_name}</div></div>
-            <div className="field"><span>Source dataset</span><div className="mono">{detail.source_dataset_id}</div></div>
-            <div className="field"><span>Target dataset</span><div className="mono">{detail.target_dataset_id}</div></div>
-            <div className="field"><span>Mapping</span><div className="mono">{detail.mapping_id}</div></div>
-            <div className="field"><span>Matching strategy</span><div className="mono">{detail.matching_strategy}</div></div>
-          </div>
-          <div className="card">
-            <div className="field"><span>Matching keys</span></div>
-            <pre className="codeblock" style={{ maxHeight: 220 }}>
-              {JSON.stringify(detail.matching_keys || {}, null, 2)}
-            </pre>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <h3 style={{ margin: 0 }}>Rule set {isEdit ? "edit" : "details"}</h3>
+          {isEdit ? header : null}
         </div>
-        <div className="card">
-          <h3>Comparison rules</h3>
-          {Array.isArray(detail.comparison_rules) && detail.comparison_rules.length ? (
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Target field</th>
-                    <th>Comparator</th>
-                    <th>Params</th>
-                    <th>Ignore</th>
-                    <th>Active</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {detail.comparison_rules.map((r) => (
-                    <tr key={r.comparison_rule_id}>
-                      <td className="mono">{r.target_field_id}</td>
-                      <td className="mono">{r.comparator_type}</td>
-                      <td className="mono">{JSON.stringify(r.comparator_params || {})}</td>
-                      <td>{r.ignore_field ? "Yes" : "No"}</td>
-                      <td>{r.is_active === false ? "No" : "Yes"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {isEdit ? (
+          <>
+            <div className="form-grid">
+              <label className="field">
+                <span>Rule set ID</span>
+                <input value={draft.rule_set_id} disabled />
+              </label>
+              <label className="field">
+                <span>Name</span>
+                <input
+                  value={draft.rule_set_name}
+                  onChange={(e) => setDraft((p) => ({ ...p, rule_set_name: e.target.value }))}
+                />
+              </label>
+              <label className="field">
+                <span>Matching strategy</span>
+                <select
+                  value={draft.matching_strategy}
+                  onChange={(e) => setDraft((p) => ({ ...p, matching_strategy: e.target.value }))}
+                >
+                  <option value="EXACT">EXACT</option>
+                  <option value="FUZZY">FUZZY</option>
+                </select>
+              </label>
             </div>
-          ) : (
-            <p className="muted" style={{ margin: 0 }}>No comparison rules.</p>
-          )}
-        </div>
+            <div className="card">
+              <h3>Matching keys</h3>
+              <MatchingKeyBuilder
+                keys={draft._matchingKeys || []}
+                trimWhitespace={draft._trimWhitespace || false}
+                onChange={(keys) => setDraft((p) => ({ ...p, _matchingKeys: keys }))}
+                onTrimChange={(tw) => setDraft((p) => ({ ...p, _trimWhitespace: tw }))}
+              />
+            </div>
+            <div className="card">
+              <h3>Comparison rules</h3>
+              <ComparisonRuleBuilder
+                rules={draft._comparisonRules || []}
+                onChange={(rules) => setDraft((p) => ({ ...p, _comparisonRules: rules }))}
+              />
+              <HelpText>
+                Saving will append new comparison rules; deleting existing rules is not yet supported from the UI.
+              </HelpText>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid two">
+              <div className="card">
+                <div className="field"><span>Rule set ID</span><div className="mono">{detail.rule_set_id}</div></div>
+                <div className="field"><span>Name</span><div>{detail.rule_set_name}</div></div>
+                <div className="field"><span>Source dataset</span><div className="mono">{detail.source_dataset_id}</div></div>
+                <div className="field"><span>Target dataset</span><div className="mono">{detail.target_dataset_id}</div></div>
+                <div className="field"><span>Mapping</span><div className="mono">{detail.mapping_id}</div></div>
+                <div className="field"><span>Matching strategy</span><div className="mono">{detail.matching_strategy}</div></div>
+              </div>
+              <div className="card">
+                <div className="field"><span>Matching keys</span></div>
+                <pre className="codeblock" style={{ maxHeight: 220 }}>
+                  {JSON.stringify(detail.matching_keys || {}, null, 2)}
+                </pre>
+              </div>
+            </div>
+            <div className="card">
+              <h3>Comparison rules</h3>
+              {Array.isArray(detail.comparison_rules) && detail.comparison_rules.length ? (
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Target field</th>
+                        <th>Comparator</th>
+                        <th>Params</th>
+                        <th>Ignore</th>
+                        <th>Active</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.comparison_rules.map((r) => (
+                        <tr key={r.comparison_rule_id}>
+                          <td className="mono">{r.target_field_id}</td>
+                          <td className="mono">{r.comparator_type}</td>
+                          <td className="mono">{JSON.stringify(r.comparator_params || {})}</td>
+                          <td>{r.ignore_field ? "Yes" : "No"}</td>
+                          <td>{r.is_active === false ? "No" : "Yes"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="muted" style={{ margin: 0 }}>No comparison rules.</p>
+              )}
+            </div>
+          </>
+        )}
       </div>
     );
   }
@@ -269,6 +597,8 @@ function EntityTable({ tab, onRunRuleSet }) {
   const [items, setItems] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [details, setDetails] = useState({});
+  const [editId, setEditId] = useState(null);
+  const [draft, setDraft] = useState(null);
 
   const load = useCallback(async () => {
     const data = await request(tab.endpoint, {}, { toast: false });
@@ -297,6 +627,161 @@ function EntityTable({ tab, onRunRuleSet }) {
       detail = { ...detail, comparison_rules: Array.isArray(cr) ? cr : [] };
     }
     setDetails((p) => ({ ...p, [id]: detail }));
+  };
+
+  const startEdit = async (id) => {
+    await loadDetail(id);
+    const detail = details[id] || (await request(`${tab.endpoint}/${id}`, {}, { toast: false }));
+    if (tab.key === "schemas") {
+      setDraft({
+        ...detail,
+        _fieldBuilderRows: schemaToFieldBuilder(detail.fields),
+      });
+    } else if (tab.key === "mappings") {
+      setDraft({
+        ...detail,
+        _fieldMappings: (detail.field_mappings || []).map((fm) => ({
+          target_field_id: fm.target_field_id || "",
+          source_expression: fm.source_expression || "",
+        })),
+      });
+    } else if (tab.key === "rule_sets") {
+      const mk = detail.matching_keys;
+      let keys = [];
+      let trimWhitespace = false;
+      if (Array.isArray(mk)) {
+        keys = mk;
+      } else if (mk && typeof mk === "object") {
+        keys = Array.isArray(mk.keys) ? mk.keys : [];
+        trimWhitespace = Boolean(mk.key_normalization?.trim_whitespace);
+      }
+      setDraft({
+        ...detail,
+        _matchingKeys: keys,
+        _trimWhitespace: trimWhitespace,
+        _comparisonRules: [],
+      });
+    } else {
+      setDraft({ ...detail });
+    }
+    setEditId(id);
+  };
+
+  const cancelEdit = () => {
+    setEditId(null);
+    setDraft(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editId || !draft) return;
+    if (tab.key === "systems") {
+      const payload = {
+        system_name: draft.system_name,
+        system_type: draft.system_type,
+        description: draft.description,
+        connection_config: draft.connection_config || {},
+        is_active: draft.is_active,
+      };
+      const updated = await request(`${tab.endpoint}/${editId}`, { method: "PUT", body: JSON.stringify(payload) }, { successMessage: `Updated ${editId}` });
+      setDetails((p) => ({ ...p, [editId]: updated }));
+    }
+    if (tab.key === "schemas") {
+      const payload = {
+        schema_name: draft.schema_name,
+        fields: fieldBuilderToSchemaFields(draft._fieldBuilderRows),
+        constraints: draft.constraints || {},
+        is_active: draft.is_active,
+      };
+      const updated = await request(`${tab.endpoint}/${editId}`, { method: "PUT", body: JSON.stringify(payload) }, { successMessage: `Updated ${editId}` });
+      setDetails((p) => ({ ...p, [editId]: updated }));
+    }
+    if (tab.key === "datasets") {
+      const payload = {
+        dataset_name: draft.dataset_name,
+        physical_name: draft.physical_name,
+        filter_config: draft.filter_config || {},
+        metadata: draft.metadata || {},
+        is_active: draft.is_active,
+      };
+      const updated = await request(`${tab.endpoint}/${editId}`, { method: "PUT", body: JSON.stringify(payload) }, { successMessage: `Updated ${editId}` });
+      setDetails((p) => ({ ...p, [editId]: updated }));
+    }
+    if (tab.key === "reference_datasets") {
+      const payload = {
+        reference_name: draft.reference_name,
+        description: draft.description,
+        source_config: draft.source_config,
+        key_fields: draft.key_fields,
+        value_fields: draft.value_fields,
+        cache_config: draft.cache_config,
+        refresh_schedule: draft.refresh_schedule,
+        is_active: draft.is_active,
+      };
+      const updated = await request(`${tab.endpoint}/${editId}`, { method: "PUT", body: JSON.stringify(payload) }, { successMessage: `Updated ${editId}` });
+      setDetails((p) => ({ ...p, [editId]: updated }));
+    }
+    if (tab.key === "mappings") {
+      const payload = {
+        mapping_name: draft.mapping_name,
+        description: draft.description,
+        is_active: draft.is_active,
+      };
+      const updated = await request(`${tab.endpoint}/${editId}`, { method: "PUT", body: JSON.stringify(payload) }, { successMessage: `Updated ${editId}` });
+      setDetails((p) => ({ ...p, [editId]: updated }));
+      // replace field mappings via delete + add
+      if (Array.isArray(draft._fieldMappings)) {
+        const existing = await request(`/api/v1/mappings/${editId}/field-mappings`, {}, { toast: false });
+        for (const fm of existing || []) {
+          await request(`/api/v1/mappings/${editId}/field-mappings/${fm.field_mapping_id}`, { method: "DELETE" }, { toast: false });
+        }
+        for (const fm of draft._fieldMappings) {
+          if (!fm.target_field_id) continue;
+          await request(`/api/v1/mappings/${editId}/field-mappings`, {
+            method: "POST",
+            body: JSON.stringify({
+              mapping_id: editId,
+              target_field_id: fm.target_field_id,
+              source_expression: fm.source_expression,
+              transform_chain: { steps: [] },
+              pre_validations: { validations: [] },
+              post_validations: { validations: [] },
+              is_active: true,
+            }),
+          }, { toast: false });
+        }
+      }
+    }
+    if (tab.key === "rule_sets") {
+      const mk = {
+        keys: draft._matchingKeys || [],
+        key_normalization: { trim_whitespace: draft._trimWhitespace || false },
+      };
+      const payload = {
+        rule_set_name: draft.rule_set_name,
+        matching_strategy: draft.matching_strategy,
+        matching_keys: mk,
+      };
+      const updated = await request(`${tab.endpoint}/${editId}`, { method: "PUT", body: JSON.stringify(payload) }, { successMessage: `Updated ${editId}` });
+      setDetails((p) => ({ ...p, [editId]: updated }));
+      // append new comparison rules
+      if (Array.isArray(draft._comparisonRules)) {
+        for (const r of draft._comparisonRules) {
+          if (!r.target_field_id) continue;
+          await request(`/api/v1/rule-sets/${editId}/comparison-rules`, {
+            method: "POST",
+            body: JSON.stringify({
+              rule_set_id: editId,
+              target_field_id: r.target_field_id,
+              comparator_type: r.comparator_type,
+              comparator_params: r.comparator_params || {},
+              ignore_field: Boolean(r.ignore_field),
+            }),
+          }, { toast: false });
+        }
+      }
+    }
+    cancelEdit();
+    load();
   };
 
   if (items === null) {
@@ -357,6 +842,15 @@ function EntityTable({ tab, onRunRuleSet }) {
                           Run
                         </button>
                       ) : null}
+                      {expanded === id ? (
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          onClick={() => (editId === id ? cancelEdit() : startEdit(id).catch(() => {}))}
+                        >
+                          {editId === id ? "Stop edit" : "Edit"}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="button button-secondary"
@@ -364,6 +858,7 @@ function EntityTable({ tab, onRunRuleSet }) {
                           const next = isExpanded ? null : id;
                           setExpanded(next);
                           if (next) loadDetail(id).catch(() => {});
+                          if (!next) cancelEdit();
                         }}
                       >
                         {isExpanded ? "Hide" : "View"}
@@ -377,7 +872,15 @@ function EntityTable({ tab, onRunRuleSet }) {
                 {isExpanded && (
                   <tr>
                     <td colSpan={tab.typeField ? 6 : 5}>
-                      <DetailPanel tabKey={tab.key} detail={details[id] || item} />
+                      <DetailPanel
+                        tabKey={tab.key}
+                        detail={details[id] || item}
+                        mode={editId === id ? "edit" : "view"}
+                        draft={editId === id ? draft : null}
+                        setDraft={setDraft}
+                        onSave={saveEdit}
+                        onCancel={cancelEdit}
+                      />
                     </td>
                   </tr>
                 )}

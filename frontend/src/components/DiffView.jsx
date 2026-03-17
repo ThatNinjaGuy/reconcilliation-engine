@@ -1,21 +1,14 @@
 /**
- * Side-by-side diff view for reconciliation results.
- * GitHub-style compare: Source (left) vs Target (right).
- * Color coding: mismatch (amber), missing from target (red), new in target (green).
+ * Git-style diff view for reconciliation results.
+ * Each record is shown as one line of tokens: field=value.
+ * Color coding: mismatch (amber), missing in target (red), new in target (green).
  */
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 const DIFF_TYPE = {
   MATCHED_DISCREPANCY: "matched_discrepancy",
   UNMATCHED_SOURCE: "unmatched_source",
   UNMATCHED_TARGET: "unmatched_target",
-};
-
-const COLORS = {
-  mismatch: { bg: "#fef3c7", border: "#f59e0b" },
-  missing: { bg: "#fee2e2", border: "#ef4444" },
-  added: { bg: "#dcfce7", border: "#22c55e" },
-  unchanged: { bg: "transparent", border: "transparent" },
 };
 
 function formatLine(record = {}, diffFieldIds = []) {
@@ -28,18 +21,19 @@ function Line({ prefix, tokens, highlight }) {
     <div className={`gitline ${highlight}`}>
       <span className="gitprefix">{prefix}</span>
       <span className="gittokens">
-        {tokens.map((t) => (
-          <span
-            key={t.k}
-            className={t.isDiff ? "gittoken gittoken-diff" : "gittoken"}
-          >
-            <span className="gitkey">{t.k}</span>
-            <span className="gitsep">=</span>
-            <span className="gitval">
-              {t.v === null || t.v === undefined ? "—" : String(t.v)}
-            </span>
+        {tokens.length === 0 ? (
+          <span className="gittoken">
+            <span className="gitval">(no fields)</span>
           </span>
-        ))}
+        ) : (
+          tokens.map((t) => (
+            <span key={t.k} className={t.isDiff ? "gittoken gittoken-diff" : "gittoken"}>
+              <span className="gitkey">{t.k}</span>
+              <span className="gitsep">=</span>
+              <span className="gitval">{t.v === null || t.v === undefined ? "—" : String(t.v)}</span>
+            </span>
+          ))
+        )}
       </span>
     </div>
   );
@@ -105,8 +99,7 @@ function RecordRowGit({
   );
 }
 
-export function DiffView({ data }) {
-  const [viewMode, setViewMode] = useState("git"); // "git" | "table"
+export default function DiffView({ data }) {
   const items = useMemo(() => {
     if (!data) return [];
     const matched = (data.matched_with_discrepancies || []).map((item) => ({
@@ -129,7 +122,7 @@ export function DiffView({ data }) {
   if (!data) {
     return (
       <div className="diff-view-empty">
-        <p>Enter a Job ID and click &quot;Load Diff View&quot; to see the side-by-side comparison.</p>
+        <p>Load a job to see the Git-style diff view.</p>
       </div>
     );
   }
@@ -158,25 +151,17 @@ export function DiffView({ data }) {
       </div>
       <div className="diff-view-legend">
         <span>
-          <span className="diff-legend-swatch" style={{ background: COLORS.mismatch.bg }} />
+          <span className="diff-legend-swatch diff-swatch-mismatch" />
           Mismatch
         </span>
         <span>
-          <span className="diff-legend-swatch" style={{ background: COLORS.missing.bg }} />
+          <span className="diff-legend-swatch diff-swatch-missing" />
           Missing in target
         </span>
         <span>
-          <span className="diff-legend-swatch" style={{ background: COLORS.added.bg }} />
+          <span className="diff-legend-swatch diff-swatch-added" />
           New in target
         </span>
-      </div>
-      <div className="diff-view-controls">
-        <button
-          type="button"
-          onClick={() => setViewMode((m) => (m === "git" ? "table" : "git"))}
-        >
-          Toggle View ({viewMode === "git" ? "Git Diff" : "Table"})
-        </button>
       </div>
       <div className="diff-view-list">
         {items.length === 0 ? (
@@ -199,3 +184,4 @@ export function DiffView({ data }) {
     </div>
   );
 }
+

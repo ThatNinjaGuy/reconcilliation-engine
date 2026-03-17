@@ -1,60 +1,51 @@
-.app {
+/* App shell (new router layout) */
+.app-shell {
+  min-height: 100vh;
+  background: radial-gradient(1200px 600px at 20% -10%, rgba(79, 70, 229, 0.12), transparent),
+    radial-gradient(1000px 700px at 110% 0%, rgba(14, 165, 233, 0.10), transparent),
+    #0b1020;
+}
+
+.app-content {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 32px 24px 80px;
+  padding: 92px 24px 80px;
+}
+
+.page {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 18px;
 }
 
-.app-header {
+.page-head {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 24px;
+  gap: 18px;
 }
 
-.app-header h1 {
-  margin: 0 0 6px;
-  font-size: 28px;
+.page-head h1 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  color: #e5e7eb;
 }
 
 .muted {
-  color: #6b7280;
+  color: rgba(226, 232, 240, 0.68);
   margin: 0;
 }
 
-.status {
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: #f1f5f9;
-  color: #1f2937;
-  min-width: 220px;
-  text-align: right;
-  font-weight: 500;
-}
-
-.status.info {
-  background: #e0f2fe;
-  color: #0369a1;
-}
-
-.status.success {
-  background: #dcfce7;
-  color: #15803d;
-}
-
-.status.error {
-  background: #fee2e2;
-  color: #b91c1c;
-}
+/* Old status bar styles intentionally removed in favor of toasts */
 
 .section {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 16px;
   padding: 24px;
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 18px 30px rgba(2, 6, 23, 0.35);
+  backdrop-filter: blur(8px);
 }
 
 .section-header {
@@ -130,6 +121,54 @@
   color: #111827;
 }
 
+/* New theme overrides for cards/forms in dark shell */
+.card {
+  background: rgba(2, 6, 23, 0.35);
+  border-color: rgba(148, 163, 184, 0.16);
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.card h2,
+.card h3 {
+  color: #e5e7eb;
+}
+
+.field span,
+.field label {
+  color: rgba(226, 232, 240, 0.75);
+}
+
+.field input,
+.field textarea,
+.field select {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.55);
+  color: #e5e7eb;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.55);
+}
+
+.codeblock {
+  margin: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  color: rgba(226, 232, 240, 0.85);
+  overflow: auto;
+  max-height: 420px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .field textarea {
   resize: vertical;
 }
@@ -157,6 +196,341 @@ button:hover {
 button.danger {
   border-color: #b91c1c;
   background: #b91c1c;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  padding: 10px 14px;
+  font-weight: 700;
+  background: rgba(15, 23, 42, 0.55);
+  color: #e5e7eb;
+}
+
+.button-secondary {
+  background: transparent;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.mono,
+.mono-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+}
+
+.small {
+  font-size: 12px;
+}
+
+/* Navbar */
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 18px;
+  background: rgba(2, 6, 23, 0.72);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  backdrop-filter: blur(10px);
+  z-index: 50;
+}
+
+.navbar-brand {
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: #e5e7eb;
+}
+
+.navbar-links {
+  display: flex;
+  gap: 10px;
+  margin-right: auto;
+}
+
+.navlink {
+  color: rgba(226, 232, 240, 0.75);
+  text-decoration: none;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+
+.navlink.active {
+  color: #e5e7eb;
+  border-color: rgba(99, 102, 241, 0.6);
+  background: rgba(99, 102, 241, 0.16);
+}
+
+.navbar-connection {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.navfield {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(226, 232, 240, 0.7);
+}
+
+.navfield input {
+  width: 220px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.55);
+  color: #e5e7eb;
+}
+
+/* Toasts */
+.toast-container {
+  position: fixed;
+  top: 76px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 60;
+  width: min(380px, calc(100vw - 32px));
+}
+
+.toast {
+  border-radius: 14px;
+  padding: 12px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(2, 6, 23, 0.82);
+  box-shadow: 0 18px 30px rgba(2, 6, 23, 0.45);
+  color: #e5e7eb;
+}
+
+.toast-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.toast-title {
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.toast-message {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.75);
+}
+
+.toast-close {
+  border: none;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.75);
+  padding: 0;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.toast-success {
+  border-color: rgba(34, 197, 94, 0.35);
+}
+.toast-error {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.toast-info {
+  border-color: rgba(14, 165, 233, 0.35);
+}
+
+/* Collapsible steps */
+.collapsible {
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  overflow: hidden;
+  background: rgba(2, 6, 23, 0.30);
+}
+
+.collapsible-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 14px;
+  background: rgba(15, 23, 42, 0.55);
+  border: none;
+  color: #e5e7eb;
+  cursor: pointer;
+}
+
+.collapsible-title-text {
+  font-weight: 900;
+}
+
+.collapsible-subtitle {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.68);
+}
+
+.collapsible-body {
+  padding: 14px;
+}
+
+.steps {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.step {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.40);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  color: rgba(226, 232, 240, 0.85);
+}
+
+.step-done {
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  background: rgba(99, 102, 241, 0.18);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+}
+
+.step-check {
+  margin-left: 6px;
+  color: #22c55e;
+}
+
+/* Tables */
+.table-wrap {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  color: rgba(226, 232, 240, 0.85);
+}
+.table th,
+.table td {
+  padding: 10px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  text-align: left;
+}
+.table th {
+  color: rgba(226, 232, 240, 0.65);
+  font-weight: 800;
+}
+
+.badge {
+  display: inline-flex;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: rgba(226, 232, 240, 0.8);
+  font-size: 12px;
+  font-weight: 800;
+}
+.badge-success {
+  border-color: rgba(34, 197, 94, 0.35);
+  color: #86efac;
+}
+.badge-danger {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+}
+.badge-info {
+  border-color: rgba(14, 165, 233, 0.35);
+  color: #7dd3fc;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tab {
+  border-radius: 999px;
+  padding: 8px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(2, 6, 23, 0.35);
+  color: rgba(226, 232, 240, 0.8);
+}
+.tab.active {
+  border-color: rgba(99, 102, 241, 0.6);
+  background: rgba(99, 102, 241, 0.16);
+  color: #e5e7eb;
+}
+
+.toggle {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: rgba(226, 232, 240, 0.75);
+  font-size: 13px;
+}
+
+.grid.three {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+.grid.five {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.card-kpi {
+  display: grid;
+  gap: 6px;
+}
+.kpi {
+  font-size: 28px;
+  font-weight: 900;
+  color: #e5e7eb;
+}
+.kpi-label {
+  color: rgba(226, 232, 240, 0.65);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.diff-legend-swatch.diff-swatch-mismatch {
+  background: #fef3c7;
+}
+.diff-legend-swatch.diff-swatch-missing {
+  background: #fee2e2;
+}
+.diff-legend-swatch.diff-swatch-added {
+  background: #dcfce7;
 }
 
 .divider {
@@ -209,7 +583,8 @@ button.danger {
   gap: 20px;
   flex-wrap: wrap;
   padding: 12px 16px;
-  background: #f1f5f9;
+  background: rgba(2, 6, 23, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 12px;
   font-size: 14px;
 }
@@ -229,18 +604,18 @@ button.danger {
 }
 
 .diff-count-mismatch {
-  background: #fef3c7;
-  color: #b45309;
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
 }
 
 .diff-count-missing {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.16);
+  color: #fca5a5;
 }
 
 .diff-count-added {
-  background: #dcfce7;
-  color: #15803d;
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
 }
 
 .diff-view-legend {
@@ -248,7 +623,7 @@ button.danger {
   gap: 20px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: #6b7280;
+  color: rgba(226, 232, 240, 0.65);
 }
 
 .diff-view-controls {
@@ -275,26 +650,28 @@ button.danger {
 .diff-view-empty {
   padding: 24px;
   text-align: center;
-  color: #6b7280;
-  background: #f9fafb;
+  color: rgba(226, 232, 240, 0.68);
+  background: rgba(2, 6, 23, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 12px;
 }
 
 .diff-record {
-  border: 1px solid #e5e7eb;
+  border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 12px;
   overflow: hidden;
-  background: #ffffff;
+  background: rgba(2, 6, 23, 0.30);
 }
 
 .diff-record-key {
   padding: 10px 14px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e5e7eb;
+  background: rgba(15, 23, 42, 0.55);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
   font-size: 13px;
   display: flex;
   align-items: center;
   gap: 10px;
+  color: rgba(226, 232, 240, 0.9);
 }
 
 .diff-badge {
@@ -305,18 +682,18 @@ button.danger {
 }
 
 .diff-badge-mismatch {
-  background: #fef3c7;
-  color: #b45309;
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
 }
 
 .diff-badge-missing {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.16);
+  color: #fca5a5;
 }
 
 .diff-badge-added {
-  background: #dcfce7;
-  color: #15803d;
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
 }
 
 .diff-record-fields {
@@ -328,7 +705,7 @@ button.danger {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: #ffffff;
+  background: rgba(2, 6, 23, 0.15);
 }
 
 .gitline {
@@ -337,18 +714,18 @@ button.danger {
   align-items: flex-start;
   padding: 10px 10px;
   border-radius: 10px;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: rgba(2, 6, 23, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .gitline.git-missing {
-  background: #fff1f2;
-  border-color: #fecdd3;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.25);
 }
 
 .gitline.git-added {
-  background: #ecfdf5;
-  border-color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.25);
 }
 
 .gitprefix {
@@ -357,7 +734,7 @@ button.danger {
   width: 16px;
   min-width: 16px;
   text-align: center;
-  color: #111827;
+  color: rgba(226, 232, 240, 0.85);
 }
 
 .gittokens {
@@ -367,33 +744,33 @@ button.danger {
   font-family: ui-monospace, monospace;
   font-size: 12px;
   line-height: 1.35;
-  color: #111827;
+  color: rgba(226, 232, 240, 0.85);
 }
 
 .gittoken {
   padding: 2px 6px;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.04);
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .gittoken-diff {
-  background: #fef3c7;
-  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.35);
 }
 
 .gitkey {
-  color: #374151;
+  color: rgba(226, 232, 240, 0.85);
   font-weight: 700;
 }
 
 .gitsep {
-  color: #9ca3af;
+  color: rgba(226, 232, 240, 0.4);
   margin: 0 2px;
 }
 
 .gitval {
-  color: #111827;
+  color: rgba(226, 232, 240, 0.85);
 }
 
 .diff-table {
@@ -426,4 +803,244 @@ button.danger {
   width: 50%;
   font-family: ui-monospace, monospace;
   font-size: 12px;
+}
+
+/* Help text */
+.help-text {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.5);
+  line-height: 1.4;
+}
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 16px;
+}
+
+/* Inline checkbox field */
+.field-inline-check {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-inline-check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #6366f1;
+  cursor: pointer;
+}
+
+/* Danger text for delete buttons */
+.danger-text {
+  color: #fca5a5 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+/* =============================================
+   Field Builder (Schema form)
+   ============================================= */
+.field-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.field-builder-header {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(226, 232, 240, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 2px;
+}
+
+.field-builder-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.fb-cell {
+  flex: 1;
+  min-width: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.55);
+  color: #e5e7eb;
+  padding: 8px 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.fb-cell:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.55);
+}
+
+.fb-small {
+  flex: 0 0 64px;
+  max-width: 64px;
+}
+
+.fb-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(226, 232, 240, 0.7);
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.fb-check input[type="checkbox"] {
+  accent-color: #6366f1;
+}
+
+.fb-remove,
+.rb-remove-placeholder {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: transparent;
+  color: #fca5a5;
+  font-size: 16px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.fb-remove:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.rb-remove-placeholder {
+  visibility: hidden;
+}
+
+/* =============================================
+   Repeating Builder (Mappings, Matching Keys)
+   ============================================= */
+.repeating-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.rb-header {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(226, 232, 240, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 2px;
+}
+
+.rb-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.rb-cell {
+  flex: 1;
+  min-width: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.55);
+  color: #e5e7eb;
+  padding: 8px 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.rb-cell:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.55);
+}
+
+.rb-check,
+.rb-check-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(226, 232, 240, 0.7);
+  white-space: nowrap;
+}
+
+.rb-check input[type="checkbox"] {
+  accent-color: #6366f1;
+}
+
+/* =============================================
+   Comparison Rule Builder
+   ============================================= */
+.cr-row {
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(2, 6, 23, 0.2);
+}
+
+.cr-main {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.cr-desc {
+  font-size: 11px;
+  color: rgba(226, 232, 240, 0.45);
+  margin: 4px 0 0 2px;
+}
+
+.rb-params {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  padding-left: 2px;
+}
+
+.rb-params .field {
+  flex: 0 0 160px;
+}
+
+.rb-params .field span {
+  font-size: 11px;
+}
+
+.rb-params input,
+.rb-params select {
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.55);
+  color: #e5e7eb;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+/* =============================================
+   Connection config form
+   ============================================= */
+.connection-config-form {
+  margin-top: 12px;
 }

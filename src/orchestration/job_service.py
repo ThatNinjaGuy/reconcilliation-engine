@@ -21,6 +21,7 @@ from ..core.repositories import (
     JobRepository,
     ResultRepository,
 )
+from ..reconciliation.matcher import RecordMatcher
 from ..reconciliation.engine import ReconciliationEngine
 from ..transformation.mapping_interpreter import MappingInterpreter
 from ..transformation.reference_manager import ReferenceDatasetManager
@@ -275,12 +276,15 @@ class JobService:
                     result_repo.save_matched_record_pairs_v2(matched_pairs_for_diff_v2)
 
                 unmatched_records = []
+                # Persist record_key for unmatched rows so the UI can show keys in Diff View.
+                # Use the same matching configuration as the matcher to keep keys consistent.
+                matcher_for_keys = RecordMatcher(matching_config)
                 for row in result.match_result.unmatched_source:
                     unmatched_records.append(
                         UnmatchedRecord(
                             run_id=run_id,
                             side="source",
-                            record_key=None,
+                            record_key=matcher_for_keys._extract_matching_key(row, "source"),
                             record_data=row.to_dict(),
                         )
                     )
@@ -289,7 +293,7 @@ class JobService:
                         UnmatchedRecord(
                             run_id=run_id,
                             side="target",
-                            record_key=None,
+                            record_key=matcher_for_keys._extract_matching_key(row, "target"),
                             record_data=row.to_dict(),
                         )
                     )

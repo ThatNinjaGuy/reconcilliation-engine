@@ -235,6 +235,40 @@ class Discrepancy(Base):
     detected_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class MatchedRecordPair(Base):
+    """Full source/target record pairs with discrepancies, for diff-view UI."""
+
+    __tablename__ = "matched_record_pairs"
+
+    pair_id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
+    run_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    record_key: Mapped[str] = mapped_column(String(500), nullable=False)
+    source_record: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False)
+    target_record: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False)
+    diff_field_ids: Mapped[list[str]] = mapped_column(JSONType, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class MatchedRecordPairV2(Base):
+    """Matched pairs with both records + metadata (for line numbers)."""
+
+    __tablename__ = "matched_record_pairs_v2"
+
+    pair_id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
+    run_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    record_key: Mapped[str] = mapped_column(String(500), nullable=False)
+    source_record: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False)
+    target_record: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False)
+    source_metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONType)
+    target_metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONType)
+    diff_field_ids: Mapped[list[str]] = mapped_column(JSONType, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class UnmatchedRecord(Base):
     __tablename__ = "unmatched_records"
 

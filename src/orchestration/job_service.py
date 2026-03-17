@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from ..connectors.factory import ConnectorFactory
 from ..connectors.base import CanonicalRow
-from ..core.models import Job, ReconciliationRun, Discrepancy, UnmatchedRecord
+from ..core.models import Job, MatchedRecordPair, MatchedRecordPairV2, ReconciliationRun, Discrepancy, UnmatchedRecord
 from ..core.repositories import (
     SystemRepository,
     DatasetRepository,
@@ -230,7 +230,30 @@ class JobService:
                 result_repo.save_run(run)
 
                 discrepancies = []
+                matched_pairs_for_diff: List[MatchedRecordPair] = []
+                matched_pairs_for_diff_v2: List[MatchedRecordPairV2] = []
                 for record_disc in result.record_discrepancies:
+                    diff_field_ids = [fd.field_id for fd in record_disc.field_discrepancies]
+                    matched_pairs_for_diff.append(
+                        MatchedRecordPair(
+                            run_id=run_id,
+                            record_key=record_disc.key,
+                            source_record=record_disc.source_record,
+                            target_record=record_disc.target_record,
+                            diff_field_ids=diff_field_ids,
+                        )
+                    )
+                    matched_pairs_for_diff_v2.append(
+                        MatchedRecordPairV2(
+                            run_id=run_id,
+                            record_key=record_disc.key,
+                            source_record=record_disc.source_record,
+                            target_record=record_disc.target_record,
+                            source_metadata=record_disc.source_metadata,
+                            target_metadata=record_disc.target_metadata,
+                            diff_field_ids=diff_field_ids,
+                        )
+                    )
                     for field_disc in record_disc.field_discrepancies:
                         discrepancies.append(
                             Discrepancy(
@@ -246,6 +269,10 @@ class JobService:
                         )
                 if discrepancies:
                     result_repo.save_discrepancies(discrepancies)
+                if matched_pairs_for_diff:
+                    result_repo.save_matched_record_pairs(matched_pairs_for_diff)
+                if matched_pairs_for_diff_v2:
+                    result_repo.save_matched_record_pairs_v2(matched_pairs_for_diff_v2)
 
                 unmatched_records = []
                 for row in result.match_result.unmatched_source:

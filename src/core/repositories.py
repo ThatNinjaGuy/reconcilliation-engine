@@ -20,6 +20,8 @@ from .models import (
     Job,
     ReconciliationRun,
     Discrepancy,
+    MatchedRecordPair,
+    MatchedRecordPairV2,
     UnmatchedRecord,
 )
 from .security import CredentialManager
@@ -333,6 +335,16 @@ class ResultRepository:
         self.db.add_all(discrepancies)
         self.db.commit()
 
+    def save_matched_record_pairs(self, pairs: List[MatchedRecordPair]) -> None:
+        if pairs:
+            self.db.add_all(pairs)
+            self.db.commit()
+
+    def save_matched_record_pairs_v2(self, pairs: List[MatchedRecordPairV2]) -> None:
+        if pairs:
+            self.db.add_all(pairs)
+            self.db.commit()
+
     def save_unmatched_records(self, records: List[UnmatchedRecord]) -> None:
         self.db.add_all(records)
         self.db.commit()
@@ -354,6 +366,28 @@ class ResultRepository:
             select(UnmatchedRecord)
             .where(UnmatchedRecord.run_id == run_id)
             .where(UnmatchedRecord.side == side)
+            .limit(limit)
+            .offset(offset)
+        )
+        return self.db.execute(stmt).scalars().all()
+
+    def get_matched_record_pairs(
+        self, run_id: str, limit: int = 10000, offset: int = 0
+    ) -> List[MatchedRecordPair]:
+        stmt = (
+            select(MatchedRecordPair)
+            .where(MatchedRecordPair.run_id == run_id)
+            .limit(limit)
+            .offset(offset)
+        )
+        return self.db.execute(stmt).scalars().all()
+
+    def get_matched_record_pairs_v2(
+        self, run_id: str, limit: int = 10000, offset: int = 0
+    ) -> List[MatchedRecordPairV2]:
+        stmt = (
+            select(MatchedRecordPairV2)
+            .where(MatchedRecordPairV2.run_id == run_id)
             .limit(limit)
             .offset(offset)
         )

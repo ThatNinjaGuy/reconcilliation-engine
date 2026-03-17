@@ -338,6 +338,24 @@ class DiscrepancyResponse(BaseModel):
     severity: str
 
 
+class DiffViewItem(BaseModel):
+    """Single row for side-by-side diff view."""
+
+    type: str  # "matched_discrepancy" | "unmatched_source" | "unmatched_target"
+    record_key: Optional[str] = None
+    source_record: Optional[Dict[str, Any]] = None
+    target_record: Optional[Dict[str, Any]] = None
+    source_metadata: Optional[Dict[str, Any]] = None
+    target_metadata: Optional[Dict[str, Any]] = None
+    diff_field_ids: Optional[List[str]] = None
+
+
+class DiffViewResponse(BaseModel):
+    matched_with_discrepancies: List[DiffViewItem]
+    unmatched_source: List[DiffViewItem]
+    unmatched_target: List[DiffViewItem]
+
+
 class SummaryStatsResponse(BaseModel):
     run_id: str
     rule_set_id: str

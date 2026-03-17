@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+import { DiffView } from "./DiffView.jsx";
+import ResultsPage from "./ResultsPage.jsx";
 
 const Section = ({ title, description, children }) => (
   <section className="section">
@@ -21,6 +23,23 @@ const ResponsePanel = ({ label, data }) => (
 );
 
 function App() {
+  const [route, setRoute] = useState(() =>
+    window.location.pathname.startsWith("/results") ? "results" : "console"
+  );
+
+  // lightweight path router (no deps)
+  useEffect(() => {
+    const onNav = () => {
+      setRoute(window.location.pathname.startsWith("/results") ? "results" : "console");
+    };
+    window.addEventListener("popstate", onNav);
+    return () => window.removeEventListener("popstate", onNav);
+  }, []);
+
+  if (route === "results") {
+    return <ResultsPage />;
+  }
+
   const [baseUrl, setBaseUrl] = useState(
     () => localStorage.getItem("genrecon.baseUrl") || "http://localhost:8000"
   );
@@ -213,6 +232,17 @@ function App() {
           <p className="muted">
             Configure systems, schemas, mappings, and run reconciliations.
           </p>
+        </div>
+        <div className="actions">
+          <button
+            type="button"
+            onClick={() => {
+              window.history.pushState({}, "", "/results");
+              setRoute("results");
+            }}
+          >
+            Results Page
+          </button>
         </div>
         <div className={`status ${status?.type || ""}`}>
           {status?.message || "Ready."}
@@ -1798,6 +1828,26 @@ function App() {
       <Section title="Results" description="Query reconciliation results.">
         <div className="grid two">
           <div className="card">
+            <h3>Diff View (Side-by-Side Compare)</h3>
+            <div className="field">
+              <label>Job ID</label>
+              <input
+                value={resultsJobId}
+                onChange={(event) => setResultsJobId(event.target.value)}
+              />
+            </div>
+            <button
+              onClick={() =>
+                request(
+                  "resultsDiffView",
+                  `/api/v1/results/${resultsJobId}/diff-view?limit=500&offset=0`
+                )
+              }
+            >
+              Load Diff View
+            </button>
+          </div>
+          <div className="card">
             <h3>Summary</h3>
             <div className="field">
               <label>Job ID</label>
@@ -1902,13 +1952,20 @@ function App() {
             </button>
           </div>
         </div>
+        {responses.resultsDiffView && (
+          <div className="diff-view-section">
+            <h3>Side-by-Side Diff</h3>
+            <DiffView data={responses.resultsDiffView} />
+          </div>
+        )}
         <ResponsePanel
-          label="Results Response"
+          label="Results Response (raw)"
           data={
             responses.resultsSummary ||
             responses.resultsDiscrepancies ||
             responses.resultsUnmatchedSource ||
-            responses.resultsUnmatchedTarget
+            responses.resultsUnmatchedTarget ||
+            (responses.resultsDiffView ? "Diff view loaded (see above)" : null)
           }
         />
       </Section>

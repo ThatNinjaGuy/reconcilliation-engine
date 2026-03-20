@@ -224,7 +224,7 @@ class Discrepancy(Base):
     discrepancy_id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True
     )
-    run_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    run_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     record_key: Mapped[str] = mapped_column(String(500), nullable=False)
     field_id: Mapped[str] = mapped_column(String(100), nullable=False)
     source_value: Mapped[Optional[str]] = mapped_column(Text)
@@ -236,30 +236,14 @@ class Discrepancy(Base):
 
 
 class MatchedRecordPair(Base):
-    """Full source/target record pairs with discrepancies, for diff-view UI."""
+    """Matched pairs with full records + metadata for diff-view UI."""
 
     __tablename__ = "matched_record_pairs"
 
     pair_id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True
     )
-    run_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    record_key: Mapped[str] = mapped_column(String(500), nullable=False)
-    source_record: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False)
-    target_record: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False)
-    diff_field_ids: Mapped[list[str]] = mapped_column(JSONType, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-class MatchedRecordPairV2(Base):
-    """Matched pairs with both records + metadata (for line numbers)."""
-
-    __tablename__ = "matched_record_pairs_v2"
-
-    pair_id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True
-    )
-    run_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    run_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     record_key: Mapped[str] = mapped_column(String(500), nullable=False)
     source_record: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False)
     target_record: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False)
@@ -275,7 +259,7 @@ class UnmatchedRecord(Base):
     record_id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True
     )
-    run_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    run_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     side: Mapped[str] = mapped_column(String(10), nullable=False)  # source|target
     record_key: Mapped[Optional[str]] = mapped_column(String(500))
     record_data: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False)
@@ -296,3 +280,4 @@ class Job(Base):
     error_message: Mapped[Optional[str]] = mapped_column(Text)
     run_id: Mapped[Optional[str]] = mapped_column(String(100))
     filters: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONType)
+    result_detail_level: Mapped[str] = mapped_column(String(20), default="FULL")

@@ -11,7 +11,13 @@ from sqlalchemy.orm import sessionmaker
 
 from ..connectors.factory import ConnectorFactory
 from ..connectors.base import CanonicalRow
-from ..core.models import Job, MatchedRecordPair, MatchedRecordPairV2, ReconciliationRun, Discrepancy, UnmatchedRecord
+from ..core.models import (
+    Job,
+    MatchedRecordPair,
+    ReconciliationRun,
+    Discrepancy,
+    UnmatchedRecord,
+)
 from ..core.repositories import (
     SystemRepository,
     DatasetRepository,
@@ -23,6 +29,7 @@ from ..core.repositories import (
 )
 from ..reconciliation.matcher import RecordMatcher
 from ..reconciliation.engine import ReconciliationEngine
+from ..reconciliation.partitioned_engine import run_partitioned_reconciliation
 from ..transformation.mapping_interpreter import MappingInterpreter
 from ..transformation.reference_manager import ReferenceDatasetManager
 from ..transformation.transform_registry import TransformRegistry
@@ -37,7 +44,12 @@ class JobService:
     def __init__(self, session_factory: sessionmaker):
         self.session_factory = session_factory
 
-    def create_job(self, rule_set_id: str, filters: Optional[Dict[str, Any]] = None) -> str:
+    def create_job(
+        self,
+        rule_set_id: str,
+        filters: Optional[Dict[str, Any]] = None,
+        result_detail_level: str = "FULL",
+    ) -> str:
         with self.session_factory() as db:
             job_repo = JobRepository(db)
             job_id = f"JOB_{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}_{uuid.uuid4().hex[:6]}"
@@ -47,6 +59,7 @@ class JobService:
                 status="PENDING",
                 created_at=datetime.utcnow(),
                 filters=filters,
+                result_detail_level=result_detail_level,
             )
             job_repo.create(job)
             return job_id
@@ -80,6 +93,10 @@ class JobService:
             job_repo.update(job_id, {"status": "CANCELLED", "completed_at": datetime.utcnow()})
             return True
 
+    # ------------------------------------------------------------------
+    # Job execution
+    # ------------------------------------------------------------------
+
     def execute_job(self, job_id: str) -> None:
         with self.session_factory() as db:
             job_repo = JobRepository(db)
@@ -96,220 +113,17 @@ class JobService:
             )
 
             try:
-                rule_set_repo = RuleSetRepository(db)
-                dataset_repo = DatasetRepository(db)
-                schema_repo = SchemaRepository(db)
-                mapping_repo = MappingRepository(db)
-                system_repo = SystemRepository(db)
-                result_repo = ResultRepository(db)
+                ctx = self._load_job_context(db, job)
 
-                rule_set = rule_set_repo.get_by_id(job.rule_set_id)
-                if not rule_set:
-                    raise ValueError("Rule set not found")
+                source_system_type = ctx["source_system"].system_type
+                target_system_type = ctx["target_system"].system_type
+                both_file = source_system_type == "FILE" and target_system_type == "FILE"
 
-                source_dataset = dataset_repo.get_by_id(rule_set.source_dataset_id)
-                target_dataset = dataset_repo.get_by_id(rule_set.target_dataset_id)
-                if not source_dataset or not target_dataset:
-                    raise ValueError("Datasets not found")
+                if both_file:
+                    self._execute_partitioned(db, job, ctx)
+                else:
+                    self._execute_in_memory(db, job, ctx)
 
-                source_schema = schema_repo.get_by_id(source_dataset.schema_id)
-                target_schema = schema_repo.get_by_id(target_dataset.schema_id)
-                if not source_schema or not target_schema:
-                    raise ValueError("Schemas not found")
-
-                mapping = mapping_repo.get_by_id(rule_set.mapping_id)
-                if not mapping:
-                    raise ValueError("Mapping not found")
-                field_mappings = mapping_repo.list_field_mappings(mapping.mapping_id)
-                comparison_rules = rule_set_repo.list_comparison_rules(rule_set.rule_set_id)
-
-                source_system = system_repo.get_by_id(source_dataset.system_id)
-                target_system = system_repo.get_by_id(target_dataset.system_id)
-                if not source_system or not target_system:
-                    raise ValueError("Systems not found")
-
-                # Read source data
-                source_reader = ConnectorFactory.create_reader(
-                    system_type=source_system.system_type,
-                    system_config=source_system.connection_config,
-                    schema=source_schema.fields,
-                )
-                target_reader = ConnectorFactory.create_reader(
-                    system_type=target_system.system_type,
-                    system_config=target_system.connection_config,
-                    schema=target_schema.fields,
-                )
-
-                source_rows = self._read_all(source_reader, source_dataset, job.filters)
-                job_repo.update(job_id, {"progress_percent": 35})
-
-                reference_manager = ReferenceDatasetManager()
-                transform_registry = TransformRegistry()
-                validation_engine = ValidationEngine()
-                mapping_payload = {
-                    "mapping_id": mapping.mapping_id,
-                    "mapping_name": mapping.mapping_name,
-                    "source_schema_id": mapping.source_schema_id,
-                    "target_schema_id": mapping.target_schema_id,
-                    "description": mapping.description,
-                    "version": mapping.version,
-                }
-                field_mapping_payloads = [
-                    {
-                        "field_mapping_id": fm.field_mapping_id,
-                        "mapping_id": fm.mapping_id,
-                        "target_field_id": fm.target_field_id,
-                        "source_expression": fm.source_expression,
-                        "transform_chain": fm.transform_chain,
-                        "pre_validations": fm.pre_validations,
-                        "post_validations": fm.post_validations,
-                        "is_active": fm.is_active,
-                    }
-                    for fm in field_mappings
-                ]
-                interpreter = MappingInterpreter(
-                    mapping=mapping_payload,
-                    field_mappings=field_mapping_payloads,
-                    reference_manager=reference_manager,
-                    transform_registry=transform_registry,
-                    validation_engine=validation_engine,
-                )
-                transformed_rows = interpreter.transform_batch(source_rows)
-                job_repo.update(job_id, {"progress_percent": 55})
-
-                target_rows = self._read_all(target_reader, target_dataset, job.filters)
-                job_repo.update(job_id, {"progress_percent": 70})
-
-                comparison_rule_payloads = [
-                    {
-                        "comparison_rule_id": cr.comparison_rule_id,
-                        "rule_set_id": cr.rule_set_id,
-                        "target_field_id": cr.target_field_id,
-                        "comparator_type": cr.comparator_type,
-                        "comparator_params": cr.comparator_params,
-                        "ignore_field": cr.ignore_field,
-                        "is_active": cr.is_active,
-                    }
-                    for cr in comparison_rules
-                ]
-                matching_config: Dict[str, Any] = {
-                    "matching_keys": rule_set.matching_keys,
-                    "matching_strategy": rule_set.matching_strategy,
-                }
-                if isinstance(rule_set.matching_keys, dict):
-                    mk = rule_set.matching_keys
-                    if "keys" in mk:
-                        matching_config["matching_keys"] = mk["keys"]
-                    if "key_normalization" in mk:
-                        matching_config["key_normalization"] = mk["key_normalization"]
-                recon_engine = ReconciliationEngine(
-                    rule_set={
-                        "rule_set_id": rule_set.rule_set_id,
-                        **matching_config,
-                    },
-                    target_schema=target_schema.fields,
-                    comparison_rules=comparison_rule_payloads,
-                )
-                result = recon_engine.reconcile(transformed_rows, target_rows)
-
-                run_id = f"RUN_{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}"
-                run = ReconciliationRun(
-                    run_id=run_id,
-                    rule_set_id=rule_set.rule_set_id,
-                    status="COMPLETED",
-                    started_at=datetime.fromisoformat(result.run_metadata["started_at"]),
-                    completed_at=datetime.fromisoformat(result.run_metadata["completed_at"]),
-                    total_source_records=result.summary_stats["total_source_records"],
-                    total_target_records=result.summary_stats["total_target_records"],
-                    matched_records=result.summary_stats["matched_records"],
-                    matched_with_discrepancy=result.summary_stats["matched_with_discrepancy"],
-                    unmatched_source_records=result.summary_stats["unmatched_source_records"],
-                    unmatched_target_records=result.summary_stats["unmatched_target_records"],
-                    summary_stats=result.summary_stats,
-                    run_metadata=result.run_metadata,
-                )
-                result_repo.save_run(run)
-
-                discrepancies = []
-                matched_pairs_for_diff: List[MatchedRecordPair] = []
-                matched_pairs_for_diff_v2: List[MatchedRecordPairV2] = []
-                for record_disc in result.record_discrepancies:
-                    diff_field_ids = [fd.field_id for fd in record_disc.field_discrepancies]
-                    matched_pairs_for_diff.append(
-                        MatchedRecordPair(
-                            run_id=run_id,
-                            record_key=record_disc.key,
-                            source_record=record_disc.source_record,
-                            target_record=record_disc.target_record,
-                            diff_field_ids=diff_field_ids,
-                        )
-                    )
-                    matched_pairs_for_diff_v2.append(
-                        MatchedRecordPairV2(
-                            run_id=run_id,
-                            record_key=record_disc.key,
-                            source_record=record_disc.source_record,
-                            target_record=record_disc.target_record,
-                            source_metadata=record_disc.source_metadata,
-                            target_metadata=record_disc.target_metadata,
-                            diff_field_ids=diff_field_ids,
-                        )
-                    )
-                    for field_disc in record_disc.field_discrepancies:
-                        discrepancies.append(
-                            Discrepancy(
-                                run_id=run_id,
-                                record_key=field_disc.key,
-                                field_id=field_disc.field_id,
-                                source_value=str(field_disc.source_value),
-                                target_value=str(field_disc.target_value),
-                                difference=field_disc.difference,
-                                comparator_type=field_disc.comparator_type,
-                                severity=field_disc.severity,
-                            )
-                        )
-                if discrepancies:
-                    result_repo.save_discrepancies(discrepancies)
-                if matched_pairs_for_diff:
-                    result_repo.save_matched_record_pairs(matched_pairs_for_diff)
-                if matched_pairs_for_diff_v2:
-                    result_repo.save_matched_record_pairs_v2(matched_pairs_for_diff_v2)
-
-                unmatched_records = []
-                # Persist record_key for unmatched rows so the UI can show keys in Diff View.
-                # Use the same matching configuration as the matcher to keep keys consistent.
-                matcher_for_keys = RecordMatcher(matching_config)
-                for row in result.match_result.unmatched_source:
-                    unmatched_records.append(
-                        UnmatchedRecord(
-                            run_id=run_id,
-                            side="source",
-                            record_key=matcher_for_keys._extract_matching_key(row, "source"),
-                            record_data=row.to_dict(),
-                        )
-                    )
-                for row in result.match_result.unmatched_target:
-                    unmatched_records.append(
-                        UnmatchedRecord(
-                            run_id=run_id,
-                            side="target",
-                            record_key=matcher_for_keys._extract_matching_key(row, "target"),
-                            record_data=row.to_dict(),
-                        )
-                    )
-                if unmatched_records:
-                    result_repo.save_unmatched_records(unmatched_records)
-
-                job_repo.update(
-                    job_id,
-                    {
-                        "status": "COMPLETED",
-                        "completed_at": datetime.utcnow(),
-                        "progress_percent": 100,
-                        "summary_stats": result.summary_stats,
-                        "run_id": run_id,
-                    },
-                )
             except Exception as exc:
                 logger.exception("Job failed: %s", job_id)
                 job_repo.update(
@@ -321,6 +135,295 @@ class JobService:
                         "progress_percent": 100,
                     },
                 )
+
+    # ------------------------------------------------------------------
+    # Shared: load all metadata needed for a job
+    # ------------------------------------------------------------------
+
+    def _load_job_context(self, db, job: Job) -> Dict[str, Any]:
+        rule_set_repo = RuleSetRepository(db)
+        dataset_repo = DatasetRepository(db)
+        schema_repo = SchemaRepository(db)
+        mapping_repo = MappingRepository(db)
+        system_repo = SystemRepository(db)
+
+        rule_set = rule_set_repo.get_by_id(job.rule_set_id)
+        if not rule_set:
+            raise ValueError("Rule set not found")
+
+        source_dataset = dataset_repo.get_by_id(rule_set.source_dataset_id)
+        target_dataset = dataset_repo.get_by_id(rule_set.target_dataset_id)
+        if not source_dataset or not target_dataset:
+            raise ValueError("Datasets not found")
+
+        source_schema = schema_repo.get_by_id(source_dataset.schema_id)
+        target_schema = schema_repo.get_by_id(target_dataset.schema_id)
+        if not source_schema or not target_schema:
+            raise ValueError("Schemas not found")
+
+        mapping = mapping_repo.get_by_id(rule_set.mapping_id)
+        if not mapping:
+            raise ValueError("Mapping not found")
+        field_mappings = mapping_repo.list_field_mappings(mapping.mapping_id)
+        comparison_rules = rule_set_repo.list_comparison_rules(rule_set.rule_set_id)
+
+        source_system = system_repo.get_by_id(source_dataset.system_id)
+        target_system = system_repo.get_by_id(target_dataset.system_id)
+        if not source_system or not target_system:
+            raise ValueError("Systems not found")
+
+        matching_config: Dict[str, Any] = {
+            "matching_keys": rule_set.matching_keys,
+            "matching_strategy": rule_set.matching_strategy,
+            "rule_set_id": rule_set.rule_set_id,
+        }
+        if isinstance(rule_set.matching_keys, dict):
+            mk = rule_set.matching_keys
+            if "keys" in mk:
+                matching_config["matching_keys"] = mk["keys"]
+            if "key_normalization" in mk:
+                matching_config["key_normalization"] = mk["key_normalization"]
+
+        comparison_rule_payloads = [
+            {
+                "comparison_rule_id": cr.comparison_rule_id,
+                "rule_set_id": cr.rule_set_id,
+                "target_field_id": cr.target_field_id,
+                "comparator_type": cr.comparator_type,
+                "comparator_params": cr.comparator_params,
+                "ignore_field": cr.ignore_field,
+                "is_active": cr.is_active,
+            }
+            for cr in comparison_rules
+        ]
+
+        mapping_payload = {
+            "mapping_id": mapping.mapping_id,
+            "mapping_name": mapping.mapping_name,
+            "source_schema_id": mapping.source_schema_id,
+            "target_schema_id": mapping.target_schema_id,
+            "description": mapping.description,
+            "version": mapping.version,
+        }
+        field_mapping_payloads = [
+            {
+                "field_mapping_id": fm.field_mapping_id,
+                "mapping_id": fm.mapping_id,
+                "target_field_id": fm.target_field_id,
+                "source_expression": fm.source_expression,
+                "transform_chain": fm.transform_chain,
+                "pre_validations": fm.pre_validations,
+                "post_validations": fm.post_validations,
+                "is_active": fm.is_active,
+            }
+            for fm in field_mappings
+        ]
+
+        return {
+            "rule_set": rule_set,
+            "source_dataset": source_dataset,
+            "target_dataset": target_dataset,
+            "source_schema": source_schema,
+            "target_schema": target_schema,
+            "source_system": source_system,
+            "target_system": target_system,
+            "matching_config": matching_config,
+            "comparison_rule_payloads": comparison_rule_payloads,
+            "mapping_payload": mapping_payload,
+            "field_mapping_payloads": field_mapping_payloads,
+        }
+
+    def _build_interpreter(self, ctx: Dict[str, Any]) -> MappingInterpreter:
+        return MappingInterpreter(
+            mapping=ctx["mapping_payload"],
+            field_mappings=ctx["field_mapping_payloads"],
+            reference_manager=ReferenceDatasetManager(),
+            transform_registry=TransformRegistry(),
+            validation_engine=ValidationEngine(),
+        )
+
+    # ------------------------------------------------------------------
+    # FILE path: partitioned, streaming, memory-bounded
+    # ------------------------------------------------------------------
+
+    def _execute_partitioned(self, db, job: Job, ctx: Dict[str, Any]) -> None:
+        job_repo = JobRepository(db)
+        result_repo = ResultRepository(db)
+        run_id = f"RUN_{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}"
+
+        source_reader = ConnectorFactory.create_reader(
+            system_type=ctx["source_system"].system_type,
+            system_config=ctx["source_system"].connection_config,
+            schema=ctx["source_schema"].fields,
+        )
+        target_reader = ConnectorFactory.create_reader(
+            system_type=ctx["target_system"].system_type,
+            system_config=ctx["target_system"].connection_config,
+            schema=ctx["target_schema"].fields,
+        )
+        sd = ctx["source_dataset"]
+        td = ctx["target_dataset"]
+
+        summary_stats = run_partitioned_reconciliation(
+            job_id=job.job_id,
+            run_id=run_id,
+            source_reader=source_reader,
+            target_reader=target_reader,
+            source_dataset={"physical_name": sd.physical_name, "filter_config": sd.filter_config or {}},
+            target_dataset={"physical_name": td.physical_name, "filter_config": td.filter_config or {}},
+            interpreter=self._build_interpreter(ctx),
+            matching_config=ctx["matching_config"],
+            target_schema=ctx["target_schema"].fields,
+            comparison_rules=ctx["comparison_rule_payloads"],
+            result_detail_level=job.result_detail_level or "FULL",
+            job_repo=job_repo,
+            result_repo=result_repo,
+        )
+
+        job_repo.update(
+            job.job_id,
+            {
+                "status": "COMPLETED",
+                "completed_at": datetime.utcnow(),
+                "progress_percent": 100,
+                "summary_stats": summary_stats,
+                "run_id": run_id,
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # Non-FILE path: in-memory (Oracle, MongoDB, etc.) -- kept as-is
+    # ------------------------------------------------------------------
+
+    def _execute_in_memory(self, db, job: Job, ctx: Dict[str, Any]) -> None:
+        job_repo = JobRepository(db)
+        result_repo = ResultRepository(db)
+
+        source_reader = ConnectorFactory.create_reader(
+            system_type=ctx["source_system"].system_type,
+            system_config=ctx["source_system"].connection_config,
+            schema=ctx["source_schema"].fields,
+        )
+        target_reader = ConnectorFactory.create_reader(
+            system_type=ctx["target_system"].system_type,
+            system_config=ctx["target_system"].connection_config,
+            schema=ctx["target_schema"].fields,
+        )
+
+        sd = ctx["source_dataset"]
+        source_rows = self._read_all(source_reader, sd, job.filters)
+        job_repo.update(job.job_id, {"progress_percent": 35})
+
+        interpreter = self._build_interpreter(ctx)
+        transformed_rows = interpreter.transform_batch(source_rows)
+        del source_rows  # Step 6: free unused memory immediately
+        job_repo.update(job.job_id, {"progress_percent": 55})
+
+        td = ctx["target_dataset"]
+        target_rows = self._read_all(target_reader, td, job.filters)
+        job_repo.update(job.job_id, {"progress_percent": 70})
+
+        recon_engine = ReconciliationEngine(
+            rule_set={
+                "rule_set_id": ctx["rule_set"].rule_set_id,
+                **ctx["matching_config"],
+            },
+            target_schema=ctx["target_schema"].fields,
+            comparison_rules=ctx["comparison_rule_payloads"],
+        )
+        result = recon_engine.reconcile(transformed_rows, target_rows)
+
+        run_id = f"RUN_{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}"
+        run = ReconciliationRun(
+            run_id=run_id,
+            rule_set_id=ctx["rule_set"].rule_set_id,
+            status="COMPLETED",
+            started_at=datetime.fromisoformat(result.run_metadata["started_at"]),
+            completed_at=datetime.fromisoformat(result.run_metadata["completed_at"]),
+            total_source_records=result.summary_stats["total_source_records"],
+            total_target_records=result.summary_stats["total_target_records"],
+            matched_records=result.summary_stats["matched_records"],
+            matched_with_discrepancy=result.summary_stats["matched_with_discrepancy"],
+            unmatched_source_records=result.summary_stats["unmatched_source_records"],
+            unmatched_target_records=result.summary_stats["unmatched_target_records"],
+            summary_stats=result.summary_stats,
+            run_metadata=result.run_metadata,
+        )
+        result_repo.save_run(run)
+
+        detail_level = job.result_detail_level or "FULL"
+
+        if detail_level == "FULL":
+            discrepancies: List[Discrepancy] = []
+            matched_pairs: List[MatchedRecordPair] = []
+            for record_disc in result.record_discrepancies:
+                diff_field_ids = [fd.field_id for fd in record_disc.field_discrepancies]
+                matched_pairs.append(
+                    MatchedRecordPair(
+                        run_id=run_id,
+                        record_key=record_disc.key,
+                        source_record=record_disc.source_record,
+                        target_record=record_disc.target_record,
+                        source_metadata=record_disc.source_metadata,
+                        target_metadata=record_disc.target_metadata,
+                        diff_field_ids=diff_field_ids,
+                    )
+                )
+                for field_disc in record_disc.field_discrepancies:
+                    discrepancies.append(
+                        Discrepancy(
+                            run_id=run_id,
+                            record_key=field_disc.key,
+                            field_id=field_disc.field_id,
+                            source_value=str(field_disc.source_value),
+                            target_value=str(field_disc.target_value),
+                            difference=field_disc.difference,
+                            comparator_type=field_disc.comparator_type,
+                            severity=field_disc.severity,
+                        )
+                    )
+            if discrepancies:
+                result_repo.save_discrepancies(discrepancies)
+            if matched_pairs:
+                result_repo.save_matched_record_pairs(matched_pairs)
+
+            unmatched_records: List[UnmatchedRecord] = []
+            matcher_for_keys = RecordMatcher(ctx["matching_config"])
+            for row in result.match_result.unmatched_source:
+                unmatched_records.append(
+                    UnmatchedRecord(
+                        run_id=run_id,
+                        side="source",
+                        record_key=matcher_for_keys.extract_matching_key(row, "source"),
+                        record_data=row.to_dict(),
+                    )
+                )
+            for row in result.match_result.unmatched_target:
+                unmatched_records.append(
+                    UnmatchedRecord(
+                        run_id=run_id,
+                        side="target",
+                        record_key=matcher_for_keys.extract_matching_key(row, "target"),
+                        record_data=row.to_dict(),
+                    )
+                )
+            if unmatched_records:
+                result_repo.save_unmatched_records(unmatched_records)
+
+        job_repo.update(
+            job.job_id,
+            {
+                "status": "COMPLETED",
+                "completed_at": datetime.utcnow(),
+                "progress_percent": 100,
+                "summary_stats": result.summary_stats,
+                "run_id": run_id,
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
 
     def _read_all(self, reader, dataset, filters: Optional[Dict[str, Any]]) -> List[CanonicalRow]:
         batch_size = 10000

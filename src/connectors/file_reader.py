@@ -1,8 +1,9 @@
-"""File dataset reader for JSON and CSV."""
+"""File dataset reader for JSON and CSV -- streaming implementation."""
 
 from __future__ import annotations
 
 import csv
+import io
 import json
 import logging
 from datetime import datetime
@@ -28,7 +29,7 @@ def _get_dict_key(d: Dict[str, Any], key: str, case_insensitive: bool = False) -
 
 
 def _extract_nested(obj: Any, path: str, case_insensitive_keys: bool = False) -> Any:
-    """Extract value from dict using dot-notation path. Keys matched by name; optionally case-insensitive."""
+    """Extract value from dict using dot-notation path."""
     keys = path.split(".")
     for key in keys:
         if obj is None:
@@ -44,12 +45,22 @@ def _extract_nested(obj: Any, path: str, case_insensitive_keys: bool = False) ->
 
 
 class FileDatasetReader(DatasetReader):
-    """Read JSON and CSV files from local filesystem."""
+    """Streaming reader for JSON and CSV files.
+
+    CSV files are read incrementally using byte-offset cursors -- only one
+    batch of rows is held in memory at a time.  JSON files are loaded in full
+    (streaming JSON arrays is uncommon at scale; CSV is the expected format
+    for large KYC datasets).
+    """
 
     def __init__(self, system_config: Dict[str, Any], schema: Dict[str, Any]):
         super().__init__(system_config, schema)
         self._base_path: Optional[Path] = None
-        self._rows_cache: Optional[List[Dict[str, Any]]] = None
+        self._csv_file: Optional[io.TextIOWrapper] = None
+        self._csv_headers: Optional[List[str]] = None
+        self._csv_header_end_offset: int = 0
+        self._json_cache: Optional[List[Dict[str, Any]]] = None
+        self._current_dataset: Optional[Dict[str, Any]] = None
 
     def connect(self) -> bool:
         base_path = self.system_config.get("base_path", "")
@@ -65,8 +76,14 @@ class FileDatasetReader(DatasetReader):
         return True
 
     def disconnect(self) -> None:
+        if self._csv_file and not self._csv_file.closed:
+            self._csv_file.close()
+        self._csv_file = None
+        self._csv_headers = None
+        self._csv_header_end_offset = 0
+        self._json_cache = None
+        self._current_dataset = None
         self._base_path = None
-        self._rows_cache = None
         logger.info("File connector disconnected")
 
     def _resolve_path(self, physical_name: str) -> Path:
@@ -77,18 +94,89 @@ class FileDatasetReader(DatasetReader):
             raise ConnectionError("Path outside base_path not allowed")
         return full
 
-    def _load_rows(self, dataset: Dict[str, Any]) -> List[Dict[str, Any]]:
-        physical_name = dataset["physical_name"]
-        path = self._resolve_path(physical_name)
+    # ------------------------------------------------------------------
+    # CSV streaming helpers
+    # ------------------------------------------------------------------
+
+    def _open_csv(self, dataset: Dict[str, Any]) -> None:
+        """Open a CSV file and read the header row, storing the byte offset
+        where data rows begin."""
+        path = self._resolve_path(dataset["physical_name"])
         if not path.exists():
             raise ConnectionError(f"File not found: {path}")
+        encoding = self.system_config.get("encoding", "utf-8")
+        filter_config = dataset.get("filter_config", {})
+        has_header = filter_config.get("has_header", True)
 
-        suffix = path.suffix.lower()
-        if suffix == ".json":
-            return self._load_json(path)
-        if suffix == ".csv":
-            return self._load_csv(path, dataset)
-        raise ConnectionError(f"Unsupported file format: {suffix}")
+        f = open(path, encoding=encoding, newline="")
+        try:
+            if has_header:
+                first_line = f.readline()
+                if first_line.strip():
+                    delimiter = filter_config.get("delimiter") or self.system_config.get("delimiter", ",")
+                    parsed = next(csv.reader(io.StringIO(first_line), delimiter=delimiter), None)
+                    self._csv_headers = parsed if parsed else []
+                else:
+                    self._csv_headers = []
+                self._csv_header_end_offset = f.tell()
+            else:
+                self._csv_headers = None
+                self._csv_header_end_offset = 0
+        except Exception:
+            f.close()
+            raise
+
+        self._csv_file = f
+        self._current_dataset = dataset
+
+    def _ensure_csv_open(self, dataset: Dict[str, Any]) -> None:
+        """Ensure the CSV file is open for the correct dataset."""
+        current_name = (self._current_dataset or {}).get("physical_name")
+        requested_name = dataset["physical_name"]
+        if self._csv_file is None or self._csv_file.closed or current_name != requested_name:
+            if self._csv_file and not self._csv_file.closed:
+                self._csv_file.close()
+            self._open_csv(dataset)
+
+    def _read_csv_batch(
+        self, byte_offset: int, batch_size: int, dataset: Dict[str, Any]
+    ) -> tuple[List[Dict[str, Any]], int, bool, int]:
+        """Read *batch_size* CSV rows starting from *byte_offset*.
+
+        Returns (rows, next_byte_offset, has_more, row_count_read).
+
+        We read raw lines and parse with csv.reader on a StringIO buffer
+        because Python disables file.tell() inside a csv.reader iteration.
+        """
+        self._ensure_csv_open(dataset)
+        assert self._csv_file is not None
+        self._csv_file.seek(byte_offset)
+
+        filter_config = dataset.get("filter_config", {})
+        delimiter = filter_config.get("delimiter") or self.system_config.get("delimiter", ",")
+
+        rows: List[Dict[str, Any]] = []
+        count = 0
+        while count < batch_size:
+            line = self._csv_file.readline()
+            if not line:
+                break
+            parsed = next(csv.reader(io.StringIO(line), delimiter=delimiter), None)
+            if parsed is None or not any(parsed):
+                continue
+            if self._csv_headers:
+                rows.append(dict(zip(self._csv_headers, parsed)))
+            else:
+                rows.append({"_col_" + str(i): v for i, v in enumerate(parsed)})
+            count += 1
+
+        next_offset = self._csv_file.tell()
+        has_more = count == batch_size
+        return rows, next_offset, has_more, count
+
+    # ------------------------------------------------------------------
+    # JSON helpers (non-streaming, kept for small / reference files)
+    # ------------------------------------------------------------------
 
     def _load_json(self, path: Path) -> List[Dict[str, Any]]:
         encoding = self.system_config.get("encoding", "utf-8")
@@ -104,21 +192,24 @@ class FileDatasetReader(DatasetReader):
             return [data]
         return [{"_value": data}]
 
-    def _load_csv(self, path: Path, dataset: Dict[str, Any]) -> List[Dict[str, Any]]:
-        encoding = self.system_config.get("encoding", "utf-8")
-        filter_config = dataset.get("filter_config", {})
-        delimiter = filter_config.get("delimiter") or self.system_config.get("delimiter", ",")
-        has_header = filter_config.get("has_header", True)
+    def _ensure_json_loaded(self, dataset: Dict[str, Any]) -> List[Dict[str, Any]]:
+        if self._json_cache is None:
+            path = self._resolve_path(dataset["physical_name"])
+            if not path.exists():
+                raise ConnectionError(f"File not found: {path}")
+            self._json_cache = self._load_json(path)
+            size_mb = path.stat().st_size / (1024 * 1024)
+            if size_mb > 500:
+                logger.warning(
+                    "JSON file %.1f MB loaded fully into memory. "
+                    "For large datasets, use CSV format for streaming support.",
+                    size_mb,
+                )
+        return self._json_cache
 
-        with open(path, encoding=encoding, newline="") as f:
-            reader = csv.reader(f, delimiter=delimiter)
-            rows = list(reader)
-        if not rows:
-            return []
-        if has_header:
-            headers = rows[0]
-            return [dict(zip(headers, row)) for row in rows[1:]]
-        return [{"_col_" + str(i): v for i, v in enumerate(row)} for row in rows]
+    # ------------------------------------------------------------------
+    # Canonical row conversion
+    # ------------------------------------------------------------------
 
     def _row_to_canonical(
         self, row: Dict[str, Any], row_num: int, filter_config: Optional[Dict[str, Any]] = None
@@ -137,9 +228,9 @@ class FileDatasetReader(DatasetReader):
             elif csv_column is not None:
                 value = _get_dict_key(row, csv_column, case_insensitive)
             else:
-                value = _get_dict_key(row, field_id, case_insensitive) or _get_dict_key(
-                    row, field_def.get("field_name", field_id), case_insensitive
-                )
+                value = _get_dict_key(row, field_id, case_insensitive)
+                if value is None:
+                    value = _get_dict_key(row, field_def.get("field_name", field_id), case_insensitive)
             fields[field_id] = value
         return CanonicalRow(
             fields=fields,
@@ -150,6 +241,10 @@ class FileDatasetReader(DatasetReader):
             },
         )
 
+    # ------------------------------------------------------------------
+    # DatasetReader interface
+    # ------------------------------------------------------------------
+
     def fetch_batch(
         self,
         dataset: Dict[str, Any],
@@ -158,25 +253,52 @@ class FileDatasetReader(DatasetReader):
         filters: Optional[Dict[str, Any]] = None,
     ) -> BatchResult:
         start = datetime.utcnow()
-        if self._rows_cache is None:
-            self._rows_cache = self._load_rows(dataset)
-        rows = self._rows_cache
-        offset = (cursor or {}).get("offset", 0)
-        chunk = rows[offset : offset + batch_size]
+        physical_name = dataset["physical_name"]
+        path = self._resolve_path(physical_name)
+        suffix = path.suffix.lower()
         filter_config = dataset.get("filter_config", {})
-        canonical = [
-            self._row_to_canonical(r, offset + i, filter_config) for i, r in enumerate(chunk)
-        ]
-        has_more = len(chunk) == batch_size and offset + batch_size < len(rows)
-        next_cursor = {"offset": offset + len(chunk)} if has_more else None
+
+        if suffix == ".csv":
+            self._ensure_csv_open(dataset)
+            byte_offset = (cursor or {}).get("byte_offset", self._csv_header_end_offset)
+            row_count_so_far = (cursor or {}).get("row_count", 0)
+
+            if byte_offset == 0:
+                byte_offset = self._csv_header_end_offset
+
+            raw_rows, next_offset, has_more, count = self._read_csv_batch(
+                byte_offset, batch_size, dataset
+            )
+            canonical = [
+                self._row_to_canonical(r, row_count_so_far + i, filter_config)
+                for i, r in enumerate(raw_rows)
+            ]
+            next_cursor = {
+                "byte_offset": next_offset,
+                "row_count": row_count_so_far + count,
+            } if has_more else None
+
+        elif suffix == ".json":
+            all_rows = self._ensure_json_loaded(dataset)
+            offset = (cursor or {}).get("offset", 0)
+            chunk = all_rows[offset: offset + batch_size]
+            canonical = [
+                self._row_to_canonical(r, offset + i, filter_config)
+                for i, r in enumerate(chunk)
+            ]
+            has_more = len(chunk) == batch_size and offset + batch_size < len(all_rows)
+            next_cursor = {"offset": offset + len(chunk)} if has_more else None
+            count = len(chunk)
+        else:
+            raise ConnectionError(f"Unsupported file format: {suffix}")
+
         return BatchResult(
             rows=canonical,
             cursor=next_cursor,
             has_more=has_more,
             batch_metadata={
                 "source": "file",
-                "rows_fetched": len(chunk),
-                "offset": offset,
+                "rows_fetched": count,
                 "duration_ms": (datetime.utcnow() - start).total_seconds() * 1000,
             },
         )
@@ -186,27 +308,62 @@ class FileDatasetReader(DatasetReader):
         dataset: Dict[str, Any],
         filters: Optional[Dict[str, Any]] = None,
     ) -> int:
-        if self._rows_cache is None:
-            self._rows_cache = self._load_rows(dataset)
-        return len(self._rows_cache)
+        path = self._resolve_path(dataset["physical_name"])
+        suffix = path.suffix.lower()
+        if suffix == ".csv":
+            encoding = self.system_config.get("encoding", "utf-8")
+            filter_config = dataset.get("filter_config", {})
+            has_header = filter_config.get("has_header", True)
+            delimiter = filter_config.get("delimiter") or self.system_config.get("delimiter", ",")
+            with open(path, encoding=encoding, newline="") as f:
+                reader = csv.reader(f, delimiter=delimiter)
+                if has_header:
+                    next(reader, None)
+                return sum(1 for row in reader if row)
+        all_rows = self._ensure_json_loaded(dataset)
+        return len(all_rows)
 
     def validate_schema(self, dataset: Dict[str, Any]) -> Dict[str, Any]:
         result = {"valid": True, "errors": [], "warnings": []}
+        path = self._resolve_path(dataset["physical_name"])
+        suffix = path.suffix.lower()
+        filter_config = dataset.get("filter_config", {})
+        case_insensitive = filter_config.get("case_insensitive_lookup", False)
+
         try:
-            rows = self._load_rows(dataset)
+            if suffix == ".csv":
+                encoding = self.system_config.get("encoding", "utf-8")
+                delimiter = filter_config.get("delimiter") or self.system_config.get("delimiter", ",")
+                has_header = filter_config.get("has_header", True)
+                with open(path, encoding=encoding, newline="") as f:
+                    reader = csv.reader(f, delimiter=delimiter)
+                    first_row = next(reader, None)
+                    if first_row is None:
+                        result["warnings"].append("File is empty")
+                        return result
+                    if has_header:
+                        headers = first_row
+                        data_row = next(reader, None)
+                        sample = dict(zip(headers, data_row)) if data_row else dict(zip(headers, [""] * len(headers)))
+                    else:
+                        sample = {"_col_" + str(i): v for i, v in enumerate(first_row)}
+            elif suffix == ".json":
+                rows = self._load_json(path)
+                if not rows:
+                    result["warnings"].append("File is empty")
+                    return result
+                sample = rows[0]
+            else:
+                result["valid"] = False
+                result["errors"].append(f"Unsupported file format: {suffix}")
+                return result
         except Exception as e:
             result["valid"] = False
             result["errors"].append(str(e))
             return result
-        if not rows:
-            result["warnings"].append("File is empty")
-            return result
-        sample = rows[0]
-        filter_config = dataset.get("filter_config", {})
-        case_insensitive = filter_config.get("case_insensitive_lookup", False)
+
         schema_fields = self.schema.get("fields", [])
         for field_def in schema_fields:
-            field_id = field_def.get("field_id")
             pm = field_def.get("physical_mapping", {})
             json_path = pm.get("json_path")
             csv_column = pm.get("csv_column")

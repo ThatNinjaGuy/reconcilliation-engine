@@ -308,9 +308,15 @@ class ComparisonRuleOut(ComparisonRuleBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ResultDetailLevel(str, Enum):
+    FULL = "FULL"
+    SUMMARY_ONLY = "SUMMARY_ONLY"
+
+
 class JobCreateRequest(BaseModel):
     rule_set_id: str
     filters: Optional[Dict[str, Any]] = None
+    result_detail_level: ResultDetailLevel = ResultDetailLevel.FULL
 
 
 class JobResponse(BaseModel):

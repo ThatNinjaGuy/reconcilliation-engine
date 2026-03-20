@@ -24,7 +24,11 @@ def create_job(
     background_tasks: BackgroundTasks,
     job_service: JobService = Depends(get_job_service),
 ):
-    job_id = job_service.create_job(rule_set_id=request.rule_set_id, filters=request.filters)
+    job_id = job_service.create_job(
+        rule_set_id=request.rule_set_id,
+        filters=request.filters,
+        result_detail_level=request.result_detail_level.value,
+    )
     background_tasks.add_task(job_service.execute_job, job_id)
     job = job_service.get_job(job_id)
     return job

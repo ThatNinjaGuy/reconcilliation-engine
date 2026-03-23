@@ -173,6 +173,9 @@ export default function ResultsPage() {
   const { jobId } = useParams();
   const { request, loading } = useApi();
   const [activeTab, setActiveTab] = useState("diff");
+  const [job, setJob] = useState(null);
+  const [jobReady, setJobReady] = useState(false);
+  const [jobLoadError, setJobLoadError] = useState("");
   const [summary, setSummary] = useState(null);
   const [diffView, setDiffView] = useState(null);
   const [discrepancies, setDiscrepancies] = useState(null);
@@ -180,15 +183,49 @@ export default function ResultsPage() {
   const [unmatchedTarget, setUnmatchedTarget] = useState(null);
 
   useEffect(() => {
-    const load = async () => {
+    let cancelled = false;
+    let timer = null;
+
+    const loadResults = async () => {
       const [s, d] = await Promise.all([
         request(`/api/v1/results/${jobId}/summary`, {}, { toast: false }),
         request(`/api/v1/results/${jobId}/diff-view?limit=2000&offset=0`, {}, { toast: false }),
       ]);
+      if (cancelled) return;
       setSummary(s);
       setDiffView(d);
+      setJobReady(true);
+      setJobLoadError("");
     };
-    load().catch(() => {});
+
+    const pollJob = async () => {
+      try {
+        const j = await request(`/api/v1/jobs/${jobId}`, {}, { toast: false });
+        if (cancelled) return;
+        setJob(j);
+        const status = String(j?.status || "").toUpperCase();
+        if (status === "COMPLETED") {
+          await loadResults();
+          return;
+        }
+        if (status === "FAILED" || status === "CANCELLED") {
+          setJobReady(false);
+          setJobLoadError(`Job ${status.toLowerCase()}.`);
+          return;
+        }
+        setJobReady(false);
+        timer = window.setTimeout(pollJob, 2000);
+      } catch {
+        if (cancelled) return;
+        setJobLoadError("Unable to load job status.");
+      }
+    };
+
+    pollJob();
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
 
@@ -237,15 +274,26 @@ export default function ResultsPage() {
           <Link className="button button-secondary" to="/">Back to Dashboard</Link>
           <button
             type="button"
-            onClick={() => request(`/api/v1/results/${jobId}/diff-view?limit=2000&offset=0`).then(setDiffView)}
-            disabled={loading}
+            onClick={() => request(`/api/v1/results/${jobId}/diff-view?limit=2000&offset=0`, {}, { toast: false }).then(setDiffView)}
+            disabled={loading || !jobReady}
           >
             Refresh Diff
           </button>
         </div>
       </div>
 
-      {kpis && (
+      {!jobReady ? (
+        <div className="card">
+          <h3>Job in progress</h3>
+          <p className="muted" style={{ margin: 0 }}>
+            {jobLoadError
+              ? jobLoadError
+              : `Current status: ${job?.status || "QUEUED"}. Results will appear automatically when complete.`}
+          </p>
+        </div>
+      ) : null}
+
+      {jobReady && kpis && (
         <div className="grid five">
           <div className="card card-kpi">
             <div className="kpi">{kpis.matched}</div>
@@ -270,13 +318,16 @@ export default function ResultsPage() {
         </div>
       )}
 
-      <Tabs active={activeTab} setActive={setActiveTab} />
-
-      {activeTab === "diff" && <DiffView data={diffView} />}
-      {activeTab === "summary" && <SummaryCards summary={summary} />}
-      {activeTab === "discrepancies" && <DiscrepancyTable data={discrepancies} />}
-      {activeTab === "unmatched_source" && <UnmatchedTable data={unmatchedSource} side="source" />}
-      {activeTab === "unmatched_target" && <UnmatchedTable data={unmatchedTarget} side="target" />}
+      {jobReady ? (
+        <>
+          <Tabs active={activeTab} setActive={setActiveTab} />
+          {activeTab === "diff" && <DiffView data={diffView} />}
+          {activeTab === "summary" && <SummaryCards summary={summary} />}
+          {activeTab === "discrepancies" && <DiscrepancyTable data={discrepancies} />}
+          {activeTab === "unmatched_source" && <UnmatchedTable data={unmatchedSource} side="source" />}
+          {activeTab === "unmatched_target" && <UnmatchedTable data={unmatchedTarget} side="target" />}
+        </>
+      ) : null}
     </div>
   );
 }

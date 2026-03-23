@@ -14,6 +14,9 @@ export default function Navbar() {
         <NavLink to="/settings" className={({ isActive }) => (isActive ? "navlink active" : "navlink")}>
           Settings
         </NavLink>
+        <NavLink to="/docs" className={({ isActive }) => (isActive ? "navlink active" : "navlink")}>
+          Docs
+        </NavLink>
       </nav>
     </div>
   );

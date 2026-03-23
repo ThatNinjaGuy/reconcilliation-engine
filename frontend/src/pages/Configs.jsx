@@ -223,6 +223,10 @@ function DetailPanel({
                 <span>Name</span>
                 <input value={draft.schema_name} onChange={(e) => setDraft((p) => ({ ...p, schema_name: e.target.value }))} />
               </label>
+              <label className="field">
+                <span>Description</span>
+                <input value={draft.description || ""} onChange={(e) => setDraft((p) => ({ ...p, description: e.target.value }))} />
+              </label>
             </div>
             <FieldBuilder fields={draft._fieldBuilderRows} onChange={(rows) => setDraft((p) => ({ ...p, _fieldBuilderRows: rows }))} />
           </>
@@ -593,7 +597,7 @@ function DetailPanel({
   return null;
 }
 
-function EntityTable({ tab, onRunRuleSet }) {
+function EntityTable({ tab, onRunRuleSet, refreshKey }) {
   const { request, loading } = useApi();
   const [items, setItems] = useState(null);
   const [expanded, setExpanded] = useState(null);
@@ -608,7 +612,7 @@ function EntityTable({ tab, onRunRuleSet }) {
 
   useEffect(() => {
     load();
-  }, [tab.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab.key, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDelete = async (id) => {
     if (!window.confirm(`Delete ${id}?`)) return;
@@ -689,6 +693,7 @@ function EntityTable({ tab, onRunRuleSet }) {
     if (tab.key === "schemas") {
       const payload = {
         schema_name: draft.schema_name,
+        description: draft.description,
         fields: fieldBuilderToSchemaFields(draft._fieldBuilderRows),
         constraints: draft.constraints || {},
         is_active: draft.is_active,
@@ -908,6 +913,7 @@ export default function Configs() {
   const [running, setRunning] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createDraft, setCreateDraft] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     Promise.all([
@@ -969,6 +975,7 @@ export default function Configs() {
       setCreateDraft({
         schema_id: "",
         schema_name: "",
+        description: "",
         _fieldBuilderRows: [emptyField()],
       });
     } else if (tab.key === "datasets") {
@@ -1034,6 +1041,7 @@ export default function Configs() {
       const payload = {
         schema_id: createDraft.schema_id,
         schema_name: createDraft.schema_name,
+        description: createDraft.description,
         fields: fieldBuilderToSchemaFields(createDraft._fieldBuilderRows),
         constraints: {},
       };
@@ -1114,8 +1122,22 @@ export default function Configs() {
 
     // Refresh lists and close
     closeCreate();
-    // soft refresh of cached lists
-    request(tab.endpoint, {}, { toast: false }).catch(() => {});
+    setRefreshKey((k) => k + 1);
+    Promise.all([
+      request("/api/v1/rule-sets", {}, { toast: false }),
+      request("/api/v1/systems", {}, { toast: false }),
+      request("/api/v1/schemas", {}, { toast: false }),
+      request("/api/v1/datasets", {}, { toast: false }),
+      request("/api/v1/mappings", {}, { toast: false }),
+    ])
+      .then(([rs, sys, sch, ds, mp]) => {
+        setRuleSets(Array.isArray(rs) ? rs : []);
+        setSystems(Array.isArray(sys) ? sys : []);
+        setSchemas(Array.isArray(sch) ? sch : []);
+        setDatasets(Array.isArray(ds) ? ds : []);
+        setMappings(Array.isArray(mp) ? mp : []);
+      })
+      .catch(() => {});
   };
 
   return (
@@ -1224,6 +1246,7 @@ export default function Configs() {
                 <div className="form-grid">
                   <label className="field"><span>Schema ID *</span><input value={createDraft.schema_id} onChange={(e)=>setCreateDraft(p=>({...p,schema_id:e.target.value}))} /></label>
                   <label className="field"><span>Name *</span><input value={createDraft.schema_name} onChange={(e)=>setCreateDraft(p=>({...p,schema_name:e.target.value}))} /></label>
+                  <label className="field"><span>Description</span><input value={createDraft.description || ""} onChange={(e)=>setCreateDraft(p=>({...p,description:e.target.value}))} /></label>
                 </div>
                 <FieldBuilder fields={createDraft._fieldBuilderRows} onChange={(rows)=>setCreateDraft(p=>({...p,_fieldBuilderRows:rows}))} />
               </>
@@ -1349,7 +1372,7 @@ export default function Configs() {
           </div>
         ) : null}
 
-        <EntityTable tab={tab} onRunRuleSet={runRuleSet} />
+        <EntityTable tab={tab} onRunRuleSet={runRuleSet} refreshKey={refreshKey} />
       </div>
     </div>
   );

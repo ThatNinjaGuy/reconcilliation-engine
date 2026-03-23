@@ -107,11 +107,11 @@ class RecordMatcher:
     def _build_index(self, rows: List[CanonicalRow], side: str) -> Dict[str, List[CanonicalRow]]:
         index: Dict[str, List[CanonicalRow]] = {}
         for row in rows:
-            key = self._extract_matching_key(row, side)
+            key = self.extract_matching_key(row, side)
             index.setdefault(key, []).append(row)
         return index
 
-    def _extract_matching_key(self, row: CanonicalRow, side: str) -> str:
+    def extract_matching_key(self, row: CanonicalRow, side: str) -> str:
         key_parts = []
         norm = self.matching_config.get("key_normalization", {})
         trim_whitespace = norm.get("trim_whitespace", False)

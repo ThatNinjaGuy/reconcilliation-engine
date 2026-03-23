@@ -308,9 +308,15 @@ class ComparisonRuleOut(ComparisonRuleBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ResultDetailLevel(str, Enum):
+    FULL = "FULL"
+    SUMMARY_ONLY = "SUMMARY_ONLY"
+
+
 class JobCreateRequest(BaseModel):
     rule_set_id: str
     filters: Optional[Dict[str, Any]] = None
+    result_detail_level: ResultDetailLevel = ResultDetailLevel.FULL
 
 
 class JobResponse(BaseModel):
@@ -336,6 +342,24 @@ class DiscrepancyResponse(BaseModel):
     difference: str
     comparator_type: str
     severity: str
+
+
+class DiffViewItem(BaseModel):
+    """Single row for side-by-side diff view."""
+
+    type: str  # "matched_discrepancy" | "unmatched_source" | "unmatched_target"
+    record_key: Optional[str] = None
+    source_record: Optional[Dict[str, Any]] = None
+    target_record: Optional[Dict[str, Any]] = None
+    source_metadata: Optional[Dict[str, Any]] = None
+    target_metadata: Optional[Dict[str, Any]] = None
+    diff_field_ids: Optional[List[str]] = None
+
+
+class DiffViewResponse(BaseModel):
+    matched_with_discrepancies: List[DiffViewItem]
+    unmatched_source: List[DiffViewItem]
+    unmatched_target: List[DiffViewItem]
 
 
 class SummaryStatsResponse(BaseModel):

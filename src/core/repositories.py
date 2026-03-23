@@ -20,6 +20,7 @@ from .models import (
     Job,
     ReconciliationRun,
     Discrepancy,
+    MatchedRecordPair,
     UnmatchedRecord,
 )
 from .security import CredentialManager
@@ -330,12 +331,36 @@ class ResultRepository:
         return run
 
     def save_discrepancies(self, discrepancies: List[Discrepancy]) -> None:
-        self.db.add_all(discrepancies)
-        self.db.commit()
+        if discrepancies:
+            self.db.add_all(discrepancies)
+            self.db.commit()
+
+    def save_matched_record_pairs(self, pairs: List[MatchedRecordPair]) -> None:
+        if pairs:
+            self.db.add_all(pairs)
+            self.db.commit()
 
     def save_unmatched_records(self, records: List[UnmatchedRecord]) -> None:
-        self.db.add_all(records)
-        self.db.commit()
+        if records:
+            self.db.add_all(records)
+            self.db.commit()
+
+    def save_partition_results(
+        self,
+        discrepancies: List[Discrepancy],
+        matched_pairs: List[MatchedRecordPair],
+        unmatched_records: List[UnmatchedRecord],
+    ) -> None:
+        """Persist one partition's results and release ORM objects from session."""
+        if discrepancies:
+            self.db.add_all(discrepancies)
+        if matched_pairs:
+            self.db.add_all(matched_pairs)
+        if unmatched_records:
+            self.db.add_all(unmatched_records)
+        if discrepancies or matched_pairs or unmatched_records:
+            self.db.commit()
+            self.db.expire_all()
 
     def get_run(self, run_id: str) -> Optional[ReconciliationRun]:
         return self.db.get(ReconciliationRun, run_id)
@@ -354,6 +379,17 @@ class ResultRepository:
             select(UnmatchedRecord)
             .where(UnmatchedRecord.run_id == run_id)
             .where(UnmatchedRecord.side == side)
+            .limit(limit)
+            .offset(offset)
+        )
+        return self.db.execute(stmt).scalars().all()
+
+    def get_matched_record_pairs(
+        self, run_id: str, limit: int = 10000, offset: int = 0
+    ) -> List[MatchedRecordPair]:
+        stmt = (
+            select(MatchedRecordPair)
+            .where(MatchedRecordPair.run_id == run_id)
             .limit(limit)
             .offset(offset)
         )

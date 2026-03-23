@@ -262,6 +262,172 @@ With the provided `sample_data` files:
 
 ---
 
+## Composite Key Scenario (2+ Columns as Unique Key)
+
+This section shows how to test matching when the unique key is a **combination of columns**.
+
+### Sample files
+
+Use these files in `sample_data/`:
+
+- `composite_source.csv`
+- `composite_target.csv`
+
+Both files use:
+
+- `company_id`
+- `invoice_id`
+
+as the composite key.
+
+### 1) Create System
+
+- **System ID:** `file_local_composite`
+- **Name:** `Local Files Composite`
+- **Type:** `FILE`
+- **Connection Config:**
+  ```json
+  {
+    "base_path": "/Users/deadshot/Desktop/Code/reconcilliation-engine/sample_data",
+    "encoding": "utf-8"
+  }
+  ```
+
+### 2) Create Schema
+
+- **Schema ID:** `composite_csv_schema`
+- **Schema Name:** `Composite CSV Schema`
+- **Fields:** (`company_id` and `invoice_id` must be `is_key: true`)
+  ```json
+  {
+    "fields": [
+      {
+        "field_id": "company_id",
+        "field_name": "company_id",
+        "data_type": "STRING",
+        "is_nullable": false,
+        "is_key": true,
+        "physical_mapping": {"csv_column": "company_id"}
+      },
+      {
+        "field_id": "invoice_id",
+        "field_name": "invoice_id",
+        "data_type": "STRING",
+        "is_nullable": false,
+        "is_key": true,
+        "physical_mapping": {"csv_column": "invoice_id"}
+      },
+      {
+        "field_id": "customer",
+        "field_name": "customer",
+        "data_type": "STRING",
+        "is_nullable": true,
+        "is_key": false,
+        "physical_mapping": {"csv_column": "customer"}
+      },
+      {
+        "field_id": "amount",
+        "field_name": "amount",
+        "data_type": "DECIMAL",
+        "precision": 18,
+        "scale": 2,
+        "is_nullable": true,
+        "is_key": false,
+        "physical_mapping": {"csv_column": "amount"}
+      },
+      {
+        "field_id": "status",
+        "field_name": "status",
+        "data_type": "STRING",
+        "is_nullable": true,
+        "is_key": false,
+        "physical_mapping": {"csv_column": "status"}
+      }
+    ]
+  }
+  ```
+
+### 3) Create Datasets
+
+- **Source Dataset**
+  - Dataset ID: `composite_source_ds`
+  - System ID: `file_local_composite`
+  - Schema ID: `composite_csv_schema`
+  - Physical Name: `composite_source.csv`
+  - Dataset Type: `FILE`
+
+- **Target Dataset**
+  - Dataset ID: `composite_target_ds`
+  - System ID: `file_local_composite`
+  - Schema ID: `composite_csv_schema`
+  - Physical Name: `composite_target.csv`
+  - Dataset Type: `FILE`
+
+### 4) Create Mapping
+
+- **Mapping ID:** `composite_mapping`
+- **Name:** `Composite Mapping`
+- **Source Schema ID:** `composite_csv_schema`
+- **Target Schema ID:** `composite_csv_schema`
+
+Field mappings (1:1):
+
+| Target Field ID | Source Expression |
+|-----------------|-------------------|
+| company_id      | company_id        |
+| invoice_id      | invoice_id        |
+| customer        | customer          |
+| amount          | amount            |
+| status          | status            |
+
+### 5) Create Rule Set (Composite Keys)
+
+- **Rule Set ID:** `composite_recon`
+- **Name:** `Composite Key Reconciliation`
+- **Source Dataset ID:** `composite_source_ds`
+- **Target Dataset ID:** `composite_target_ds`
+- **Mapping ID:** `composite_mapping`
+- **Matching Keys:**
+  ```json
+  {
+    "keys": [
+      {
+        "source_field": "company_id",
+        "target_field": "company_id",
+        "is_case_sensitive": true
+      },
+      {
+        "source_field": "invoice_id",
+        "target_field": "invoice_id",
+        "is_case_sensitive": true
+      }
+    ],
+    "key_normalization": {
+      "trim_whitespace": true
+    }
+  }
+  ```
+
+### 6) Optional Comparison Rules
+
+Add `EXACT` comparison rules for:
+
+- `customer`
+- `amount`
+- `status`
+
+### Expected Output (Composite Test)
+
+For the supplied composite files, expected highlights:
+
+- **Matched with discrepancies:** `C01|INV-1002`, `C02|INV-1002`, `C04|INV-1001`
+- **Unmatched source:** `C04|INV-1002`
+- **Unmatched target:** `C05|INV-1001`
+
+This validates that matching is done on the **combined key** (`company_id + invoice_id`), not on either column alone.
+
+---
+
 ## Quick Test via API
 
 ```bash

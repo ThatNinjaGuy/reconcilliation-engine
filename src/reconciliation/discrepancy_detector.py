@@ -29,6 +29,8 @@ class RecordDiscrepancy:
     field_discrepancies: List[FieldDiscrepancy]
     source_metadata: Dict[str, Any]
     target_metadata: Dict[str, Any]
+    source_record: Dict[str, Any]
+    target_record: Dict[str, Any]
 
 
 class DiscrepancyDetector:
@@ -60,6 +62,8 @@ class DiscrepancyDetector:
                         field_discrepancies=field_discrepancies,
                         source_metadata=pair.source_row.metadata,
                         target_metadata=pair.target_row.metadata,
+                        source_record=dict(pair.source_row.fields),
+                        target_record=dict(pair.target_row.fields),
                     )
                 )
         logger.info("Found discrepancies in %s matched records", len(record_discrepancies))

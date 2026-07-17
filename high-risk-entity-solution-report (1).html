@@ -1,0 +1,1146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>High Risk Entity Detection Solution Report</title>
+    <meta
+      name="description"
+      content="Client-facing report describing the proposed high-risk entity detection solution, including learning phase, live flow, analyst review, and technical architecture."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root,
+      [data-theme="light"] {
+        --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+        --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+        --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+        --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+        --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+        --text-2xl: clamp(2rem, 1.2rem + 2.5vw, 3.5rem);
+        --text-3xl: clamp(2.5rem, 1rem + 4vw, 5rem);
+        --space-1: 0.25rem;
+        --space-2: 0.5rem;
+        --space-3: 0.75rem;
+        --space-4: 1rem;
+        --space-5: 1.25rem;
+        --space-6: 1.5rem;
+        --space-8: 2rem;
+        --space-10: 2.5rem;
+        --space-12: 3rem;
+        --space-16: 4rem;
+        --space-20: 5rem;
+        --space-24: 6rem;
+        --color-bg: #f7f6f2;
+        --color-surface: #f9f8f5;
+        --color-surface-2: #fbfbf9;
+        --color-surface-offset: #f0ede7;
+        --color-surface-dynamic: #e7e2da;
+        --color-border: #d7d2cb;
+        --color-divider: #e0dbd3;
+        --color-text: #24211d;
+        --color-text-muted: #6c6a64;
+        --color-text-faint: #9a968d;
+        --color-text-inverse: #f9f8f4;
+        --color-primary: #0f666d;
+        --color-primary-hover: #0d5055;
+        --color-primary-highlight: #d9e8e7;
+        --color-success: #437a22;
+        --color-warning: #a05c1a;
+        --color-error: #8d2962;
+        --radius-sm: 0.5rem;
+        --radius-md: 0.875rem;
+        --radius-lg: 1.25rem;
+        --radius-xl: 1.75rem;
+        --shadow-sm: 0 1px 2px rgba(26, 20, 12, 0.06);
+        --shadow-md: 0 10px 30px rgba(26, 20, 12, 0.08);
+        --shadow-lg: 0 24px 60px rgba(26, 20, 12, 0.12);
+        --font-display: "Instrument Serif", Georgia, serif;
+        --font-body: "Inter", Arial, sans-serif;
+        --content-default: 1100px;
+        --content-wide: 1280px;
+        --transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      [data-theme="dark"] {
+        --color-bg: #171614;
+        --color-surface: #1c1b19;
+        --color-surface-2: #22211f;
+        --color-surface-offset: #272522;
+        --color-surface-dynamic: #2e2b27;
+        --color-border: #3b3834;
+        --color-divider: #2f2c28;
+        --color-text: #ece8e0;
+        --color-text-muted: #b2ada4;
+        --color-text-faint: #8c867d;
+        --color-text-inverse: #171614;
+        --color-primary: #63a8b1;
+        --color-primary-hover: #86bcc3;
+        --color-primary-highlight: #283739;
+        --color-success: #7eb15f;
+        --color-warning: #dc984f;
+        --color-error: #d071af;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.22);
+        --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.3);
+        --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.4);
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        min-height: 100vh;
+        font-family: var(--font-body);
+        font-size: var(--text-base);
+        line-height: 1.6;
+        background:
+          radial-gradient(
+            circle at top right,
+            rgba(15, 102, 109, 0.09),
+            transparent 28%
+          ),
+          radial-gradient(
+            circle at top left,
+            rgba(160, 92, 26, 0.07),
+            transparent 24%
+          ),
+          var(--color-bg);
+        color: var(--color-text);
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      button {
+        font: inherit;
+        border: none;
+        background: none;
+        cursor: pointer;
+        color: inherit;
+      }
+      img,
+      svg {
+        max-width: 100%;
+        display: block;
+      }
+      .skip-link {
+        position: absolute;
+        left: -999px;
+        top: auto;
+      }
+      .skip-link:focus {
+        left: var(--space-4);
+        top: var(--space-4);
+        z-index: 999;
+        background: var(--color-primary);
+        color: var(--color-text-inverse);
+        padding: var(--space-3) var(--space-4);
+        border-radius: var(--radius-full, 999px);
+      }
+      .header {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        backdrop-filter: blur(14px);
+        background: color-mix(in srgb, var(--color-bg) 84%, transparent);
+        border-bottom: 1px solid
+          color-mix(in srgb, var(--color-border) 82%, transparent);
+      }
+      .nav {
+        max-width: var(--content-wide);
+        margin: 0 auto;
+        padding: var(--space-4) var(--space-5);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-4);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        font-size: var(--text-sm);
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .brand svg {
+        width: 38px;
+        height: 38px;
+        color: var(--color-primary);
+      }
+      .nav-links {
+        display: flex;
+        gap: var(--space-4);
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .nav-links a {
+        color: var(--color-text-muted);
+        font-size: var(--text-sm);
+      }
+      .nav-links a:hover {
+        color: var(--color-text);
+      }
+      .theme-toggle {
+        width: 44px;
+        height: 44px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--color-surface-offset);
+        border: 1px solid var(--color-border);
+        transition:
+          transform var(--transition),
+          background var(--transition);
+      }
+      .theme-toggle:hover {
+        transform: translateY(-1px);
+        background: var(--color-primary-highlight);
+      }
+      .hero {
+        max-width: var(--content-wide);
+        margin: 0 auto;
+        padding: clamp(var(--space-12), 9vw, var(--space-24)) var(--space-5)
+          var(--space-16);
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: var(--space-10);
+        align-items: end;
+      }
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: 0.45rem 0.9rem;
+        border-radius: 999px;
+        background: var(--color-primary-highlight);
+        color: var(--color-primary);
+        font-size: var(--text-xs);
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: var(--space-5);
+      }
+      h1,
+      h2,
+      h3,
+      h4 {
+        line-height: 1.08;
+        text-wrap: balance;
+      }
+      h1 {
+        font-family: var(--font-display);
+        font-size: clamp(2.8rem, 2rem + 4vw, 5.7rem);
+        letter-spacing: -0.04em;
+        max-width: 10ch;
+        margin-bottom: var(--space-5);
+      }
+      .hero p {
+        color: var(--color-text-muted);
+        max-width: 64ch;
+        margin-bottom: var(--space-6);
+      }
+      .hero-actions {
+        display: flex;
+        gap: var(--space-3);
+        flex-wrap: wrap;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: 0.95rem 1.2rem;
+        border-radius: 999px;
+        font-size: var(--text-sm);
+        font-weight: 700;
+        border: 1px solid transparent;
+        transition: all var(--transition);
+      }
+      .btn-primary {
+        background: var(--color-primary);
+        color: var(--color-text-inverse);
+        box-shadow: var(--shadow-sm);
+      }
+      .btn-primary:hover {
+        background: var(--color-primary-hover);
+        transform: translateY(-1px);
+      }
+      .btn-secondary {
+        background: var(--color-surface);
+        border-color: var(--color-border);
+      }
+      .hero-side {
+        background: linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--color-surface) 92%, transparent),
+          var(--color-surface-offset)
+        );
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-xl);
+        padding: var(--space-6);
+        box-shadow: var(--shadow-lg);
+        position: relative;
+        overflow: hidden;
+      }
+      .hero-side::before {
+        content: "";
+        position: absolute;
+        inset: -20% auto auto 60%;
+        width: 220px;
+        height: 220px;
+        background: radial-gradient(
+          circle,
+          color-mix(in srgb, var(--color-primary) 22%, transparent),
+          transparent 70%
+        );
+        pointer-events: none;
+      }
+      .hero-kicker {
+        font-size: var(--text-xs);
+        color: var(--color-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: var(--space-4);
+      }
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-4);
+      }
+      .metric {
+        padding: var(--space-4);
+        background: color-mix(in srgb, var(--color-surface-2) 90%, transparent);
+        border: 1px solid
+          color-mix(in srgb, var(--color-border) 80%, transparent);
+        border-radius: var(--radius-lg);
+      }
+      .metric strong {
+        display: block;
+        font-size: var(--text-xl);
+        line-height: 1;
+        margin-bottom: var(--space-2);
+      }
+      .metric span {
+        color: var(--color-text-muted);
+        font-size: var(--text-sm);
+      }
+      .container {
+        max-width: var(--content-wide);
+        margin: 0 auto;
+        padding: 0 var(--space-5);
+      }
+      section {
+        padding: clamp(var(--space-10), 7vw, var(--space-20)) 0;
+      }
+      .section-head {
+        max-width: 72ch;
+        margin-bottom: var(--space-8);
+      }
+      .section-head h2 {
+        font-family: var(--font-display);
+        font-size: clamp(2.25rem, 1.7rem + 2vw, 3.75rem);
+        letter-spacing: -0.04em;
+        margin-bottom: var(--space-4);
+        color: color-mix(
+          in srgb,
+          var(--color-text) 92%,
+          var(--color-primary) 8%
+        );
+        /* text-decoration: underline; */
+        text-decoration-thickness: 0.055em;
+        text-underline-offset: 0.08em;
+        text-decoration-color: color-mix(
+          in srgb,
+          var(--color-primary) 48%,
+          transparent
+        );
+      }
+      .section-head p {
+        color: var(--color-text-muted);
+      }
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-5);
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-5);
+      }
+      .card {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-xl);
+        padding: var(--space-6);
+        box-shadow: var(--shadow-sm);
+        min-height: 100%;
+      }
+      .card h3 {
+        font-size: var(--text-lg);
+        margin-bottom: var(--space-3);
+      }
+      .card p,
+      .card li {
+        color: var(--color-text-muted);
+      }
+      .card ul {
+        list-style: none;
+        display: grid;
+        gap: var(--space-3);
+        margin-top: var(--space-4);
+      }
+      .card li::before {
+        content: "•";
+        color: var(--color-primary);
+        font-weight: 800;
+        margin-right: var(--space-2);
+      }
+      .timeline {
+        display: grid;
+        gap: var(--space-5);
+        position: relative;
+      }
+      .timeline::before {
+        content: "";
+        position: absolute;
+        left: 1.1rem;
+        top: 0.5rem;
+        bottom: 0.5rem;
+        width: 2px;
+        background: linear-gradient(
+          var(--color-primary-highlight),
+          transparent
+        );
+      }
+      .timeline-step {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: var(--space-4);
+        align-items: start;
+      }
+      .timeline-dot {
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 999px;
+        background: var(--color-primary);
+        color: var(--color-text-inverse);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: var(--text-sm);
+        font-weight: 800;
+        box-shadow: var(--shadow-sm);
+        position: relative;
+        z-index: 1;
+      }
+      .timeline-content {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-xl);
+        padding: var(--space-5);
+      }
+      .timeline-content h3 {
+        margin-bottom: var(--space-2);
+        font-size: var(--text-lg);
+      }
+      .timeline-content p {
+        color: var(--color-text-muted);
+      }
+      .workflow {
+        display: grid;
+        gap: var(--space-4);
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        align-items: stretch;
+      }
+      .flow-card {
+        grid-column: span 3;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-xl);
+        padding: var(--space-5);
+        position: relative;
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+      }
+      .flow-card.wide {
+        grid-column: span 4;
+      }
+      .flow-card::after {
+        content: "";
+        position: absolute;
+        inset: auto -20% -40% auto;
+        width: 180px;
+        height: 180px;
+        background: radial-gradient(
+          circle,
+          color-mix(in srgb, var(--color-primary) 10%, transparent),
+          transparent 70%
+        );
+        pointer-events: none;
+      }
+      .flow-tag {
+        display: inline-block;
+        margin-bottom: var(--space-3);
+        padding: 0.35rem 0.7rem;
+        border-radius: 999px;
+        background: var(--color-surface-offset);
+        color: var(--color-text-muted);
+        font-size: var(--text-xs);
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .flow-card h3 {
+        font-size: 1.08rem;
+        margin-bottom: var(--space-2);
+      }
+      .flow-card p {
+        color: var(--color-text-muted);
+        font-size: var(--text-sm);
+      }
+      .flow-arrow {
+        grid-column: span 12;
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        color: var(--color-text-faint);
+        font-size: var(--text-sm);
+        padding-left: var(--space-1);
+      }
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+        margin-top: var(--space-4);
+      }
+      .pill {
+        padding: 0.45rem 0.7rem;
+        border-radius: 999px;
+        font-size: var(--text-xs);
+        font-weight: 600;
+        background: var(--color-surface-offset);
+        border: 1px solid
+          color-mix(in srgb, var(--color-border) 76%, transparent);
+        color: var(--color-text-muted);
+      }
+      .highlight-panel {
+        background: linear-gradient(
+          180deg,
+          var(--color-surface),
+          color-mix(in srgb, var(--color-surface-offset) 92%, transparent)
+        );
+        border: 1px solid var(--color-border);
+        border-radius: calc(var(--radius-xl) + 0.3rem);
+        padding: clamp(var(--space-6), 5vw, var(--space-10));
+        box-shadow: var(--shadow-lg);
+      }
+      .two-tone {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-5);
+      }
+      .band {
+        padding: var(--space-4);
+        border-radius: var(--radius-lg);
+        background: color-mix(
+          in srgb,
+          var(--color-primary-highlight) 78%,
+          transparent
+        );
+        border: 1px solid
+          color-mix(in srgb, var(--color-primary) 18%, var(--color-border));
+      }
+      .band h4 {
+        margin-bottom: var(--space-2);
+        font-size: 1rem;
+      }
+      .band p {
+        color: var(--color-text-muted);
+        font-size: var(--text-sm);
+      }
+      .foot-grid {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: var(--space-5);
+      }
+      .footer {
+        padding: var(--space-10) 0 var(--space-12);
+        border-top: 1px solid var(--color-divider);
+        color: var(--color-text-muted);
+      }
+      .footer small {
+        font-size: var(--text-sm);
+      }
+      .code-block {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.9rem;
+        padding: var(--space-4);
+        background: color-mix(
+          in srgb,
+          var(--color-surface-offset) 90%,
+          transparent
+        );
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        white-space: pre-wrap;
+        color: var(--color-text-muted);
+      }
+      .note {
+        border-left: 3px solid
+          color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+        padding-left: var(--space-4);
+        color: var(--color-text-muted);
+        margin-top: var(--space-4);
+      }
+      @media (max-width: 1100px) {
+        .hero,
+        .grid-3,
+        .grid-2,
+        .two-tone,
+        .foot-grid {
+          grid-template-columns: 1fr;
+        }
+        .workflow {
+          grid-template-columns: 1fr;
+        }
+        .flow-card,
+        .flow-card.wide,
+        .flow-arrow {
+          grid-column: auto;
+        }
+        h1 {
+          max-width: 100%;
+        }
+      }
+      @media (max-width: 720px) {
+        .nav {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .nav-links {
+          width: 100%;
+          justify-content: space-between;
+        }
+        .metric-grid {
+          grid-template-columns: 1fr;
+        }
+        .hero,
+        .container {
+          padding-left: var(--space-4);
+          padding-right: var(--space-4);
+        }
+        section {
+          padding: var(--space-12) 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+        *,
+        *::before,
+        *::after {
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a href="#main" class="skip-link">Skip to content</a>
+    <header class="header">
+      <nav class="nav" aria-label="Primary navigation">
+        <div class="brand">
+          <svg
+            viewBox="0 0 64 64"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="3"
+            aria-label="Solution logo"
+          >
+            <rect x="8" y="10" width="20" height="20" rx="6"></rect>
+            <rect x="36" y="10" width="20" height="20" rx="6"></rect>
+            <rect x="22" y="34" width="20" height="20" rx="6"></rect>
+            <path d="M28 20h8M32 30v4M22 44l-6 0M42 44h6"></path>
+          </svg>
+          <span>HRE Solution Design</span>
+        </div>
+        <div class="nav-links">
+          <a href="#overview">Overview</a>
+          <a href="#learning-phase">Learning phase</a>
+          <a href="#live-flow">Live flow</a>
+          <a href="#analyst">Analyst review</a>
+          <a href="#technology">Technical view</a>
+          <button
+            class="theme-toggle"
+            type="button"
+            aria-label="Switch theme"
+            data-theme-toggle
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </button>
+        </div>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="overview">
+        <div>
+          <h1>High Risk Entity detection</h1>
+          <p>
+            This solution transforms a manual, analyst-heavy screening process
+            into a structured workflow that combines historical intelligence,
+            rules-based triage, guided LLM reasoning, targeted web research, and
+            analyst approval. The result is faster identification of potential
+            high-risk counterparties with stronger traceability and a more
+            defensible review process.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#live-flow">View live workflow</a>
+            <a class="btn btn-secondary" href="#technology"
+              >See technical components</a
+            >
+          </div>
+        </div>
+        <aside class="hero-side" aria-label="Key business outcomes">
+          <div class="hero-kicker">What this design emphasizes</div>
+          <div class="metric-grid">
+            <div class="metric">
+              <strong>Faster</strong>
+              <span
+                >Reduce manual scanning effort by prioritizing only meaningful
+                candidates.</span
+              >
+            </div>
+            <div class="metric">
+              <strong>Explainable</strong>
+              <span
+                >Every recommendation is backed by rules, evidence, and
+                citations for analyst review.</span
+              >
+            </div>
+            <div class="metric">
+              <strong>Adaptive</strong>
+              <span
+                >Historical tags, blacklist/whitelist curation, and analyst
+                feedback keep improving coverage.</span
+              >
+            </div>
+            <div class="metric">
+              <strong>Practical</strong>
+              <span
+                >Designed to work without model fine-tuning or custom ML
+                training.</span
+              >
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section>
+        <div class="container">
+          <div class="section-head">
+            <h2>Project plan</h2>
+            <p>
+              The proposed platform is not just a detector. It is a governed
+              review system that starts from known historical knowledge, screens
+              monthly counterparty populations in stages, and hands analysts a
+              curated, evidence-backed queue instead of raw names.
+            </p>
+          </div>
+          <div class="grid-3">
+            <article class="card">
+              <h3>Structured knowledge base</h3>
+              <p>
+                Historical high-risk entities, category mappings, blacklist
+                entries, whitelist exceptions, keywords, and analyst playbooks
+                are organized into reusable knowledge assets.
+              </p>
+              <ul>
+                <li>Category definitions and keyword groups.</li>
+                <li>Known high-risk counterparties by source and rationale.</li>
+                <li>
+                  Known safe exceptions that prevent repeat false positives.
+                </li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>Operational monthly workflow</h3>
+              <p>
+                The live pipeline ingests counterparty lists, checks known
+                matches, applies rules-based triage, then uses LLM-assisted
+                search and evidence gathering only where needed.
+              </p>
+              <ul>
+                <li>Easy pass and easy fail decisions are resolved early.</li>
+                <li>Borderline cases receive deeper enrichment.</li>
+                <li>
+                  Analysts review a ranked evidence pack instead of raw hits.
+                </li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>Analyst-ready output</h3>
+              <p>
+                The final interface presents suggested high-risk entities,
+                category proposals, citations, and draft response support so
+                analysts can approve, reject, or amend decisions efficiently.
+              </p>
+              <ul>
+                <li>Citation-backed recommendations.</li>
+                <li>Category-wise rationale and confidence signals.</li>
+                <li>Final approved HRE list plus draft response support.</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="learning-phase">
+        <div class="container">
+          <div class="section-head">
+            <h2>Learning, training, and development phase</h2>
+            <p>
+              Before the live pipeline goes into production, the engagement
+              begins with a structured discovery and knowledge-building phase.
+              This is where existing analyst expertise is converted into
+              reusable system intelligence.
+            </p>
+          </div>
+          <div class="highlight-panel">
+            <div class="timeline">
+              <div class="timeline-step">
+                <div class="timeline-dot">1</div>
+                <div class="timeline-content">
+                  <h3>Historical scan review</h3>
+                  <p>
+                    Review previously identified high-risk entities, past
+                    investigations, and prior scan outputs to understand what
+                    was flagged, what was confirmed, and what was dismissed.
+                  </p>
+                </div>
+              </div>
+              <div class="timeline-step">
+                <div class="timeline-dot">2</div>
+                <div class="timeline-content">
+                  <h3>Source and website discovery</h3>
+                  <p>
+                    Identify the websites, registries, and public sources where
+                    prior high-risk hits were typically observed. These become
+                    part of the evidence-gathering playbook for the live flow.
+                  </p>
+                </div>
+              </div>
+              <div class="timeline-step">
+                <div class="timeline-dot">3</div>
+                <div class="timeline-content">
+                  <h3>Historical category mapping</h3>
+                  <p>
+                    Collect counterparties that were historically tagged to
+                    categories such as betting, gambling, virtual assets,
+                    foreign exchange, and related high-risk classes. This
+                    becomes the starting blacklist and category library.
+                  </p>
+                </div>
+              </div>
+              <div class="timeline-step">
+                <div class="timeline-dot">4</div>
+                <div class="timeline-content">
+                  <h3>Whitelist design</h3>
+                  <p>
+                    Curate known counterparties that should not be repeatedly
+                    escalated, including legitimate firms, known safe entities,
+                    recurring false-positive patterns, and approved exceptions.
+                  </p>
+                </div>
+              </div>
+              <div class="timeline-step">
+                <div class="timeline-dot">5</div>
+                <div class="timeline-content">
+                  <h3>Analyst process mapping</h3>
+                  <p>
+                    Work directly with analysts to document how they search,
+                    what evidence they trust, how they classify, and where
+                    manual effort is concentrated today. This becomes the design
+                    input for prompts, rules, queues, and review screens.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <p class="note">
+              Outcome of this phase: a validated domain playbook containing
+              blacklist, whitelist, category definitions, source inventory,
+              keyword inventory, and analyst decision heuristics.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="container">
+          <div class="section-head">
+            <h2>Core business components</h2>
+            <p>
+              These components form the backbone of the solution and continue to
+              operate across both onboarding and live monthly execution.
+            </p>
+          </div>
+          <div class="grid-2">
+            <article class="card">
+              <h3>Knowledge and policy layer</h3>
+              <p>
+                This layer stores the curated business intelligence needed to
+                drive consistent decisions.
+              </p>
+              <div class="pill-row">
+                <span class="pill">Blacklist registry</span>
+                <span class="pill">Whitelist registry</span>
+                <span class="pill">Risk categories</span>
+                <span class="pill">Keyword catalogs</span>
+                <span class="pill">Analyst heuristics</span>
+                <span class="pill">Approved sources</span>
+              </div>
+            </article>
+            <article class="card">
+              <h3>Decision and review layer</h3>
+              <p>
+                This layer determines how a counterparty moves from raw input to
+                analyst review and final approval.
+              </p>
+              <div class="pill-row">
+                <span class="pill">Match engine</span>
+                <span class="pill">Rules scoring</span>
+                <span class="pill">LLM keyword reasoning</span>
+                <span class="pill">Web evidence collection</span>
+                <span class="pill">Citation builder</span>
+                <span class="pill">Analyst workbench</span>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="live-flow">
+        <div class="container">
+          <div class="section-head">
+            <h2>Live monthly flow</h2>
+            <p>
+              The production flow is designed to resolve obvious cases early,
+              spend effort only where needed, and deliver fully supported
+              analyst recommendations.
+            </p>
+          </div>
+          <div class="workflow" aria-label="Live flow workflow cards">
+            <article class="flow-card wide">
+              <span class="flow-tag">Input</span>
+              <h3>Monthly counterparty universe</h3>
+              <p>
+                Receive the deduplicated counterparty list extracted from
+                monthly trade activity, along with transaction descriptors,
+                client context, and any usable supporting metadata.
+              </p>
+            </article>
+            <article class="flow-card wide">
+              <span class="flow-tag">Step 1</span>
+              <h3>Blacklist matching</h3>
+              <p>
+                Check counterparties against the historical blacklist and known
+                category mappings. Strong matches are immediately identified as
+                likely HRE candidates with known lineage.
+              </p>
+            </article>
+            <article class="flow-card wide">
+              <span class="flow-tag">Step 2</span>
+              <h3>Whitelist and easy-fail controls</h3>
+              <p>
+                Known safe entities and approved exceptions are removed early to
+                reduce noise and prevent re-review of recurring false positives.
+              </p>
+            </article>
+
+            <div class="flow-arrow" aria-hidden="true">
+              → Early deterministic triage removes obvious hits and obvious
+              non-hits
+            </div>
+
+            <article class="flow-card">
+              <span class="flow-tag">Step 3</span>
+              <h3>Rules-based scoring</h3>
+              <p>
+                Apply category-aware rules using names, descriptors, keywords,
+                transaction context, and analyst-defined patterns to identify
+                easy matches and borderline cases.
+              </p>
+            </article>
+            <article class="flow-card">
+              <span class="flow-tag">Step 4</span>
+              <h3>LLM-based keyword reasoning</h3>
+              <p>
+                Use an LLM to interpret ambiguous names, evaluate contextual
+                keyword meaning, and separate genuine business indicators from
+                human names or innocuous strings.
+              </p>
+            </article>
+            <article class="flow-card">
+              <span class="flow-tag">Step 5</span>
+              <h3>Web search and evidence retrieval</h3>
+              <p>
+                Search trusted public sources and relevant websites to collect
+                supporting evidence on business activity, services, licensing,
+                descriptors, and observed risk indicators.
+              </p>
+            </article>
+            <article class="flow-card">
+              <span class="flow-tag">Step 6</span>
+              <h3>Citation and evidence pack</h3>
+              <p>
+                Bundle matched rules, snippets, URLs, category indicators, and
+                extracted evidence into a concise review pack for every
+                escalated entity.
+              </p>
+            </article>
+
+            <div class="flow-arrow" aria-hidden="true">
+              → Only the smaller set of uncertain or meaningful candidates
+              reaches deep review
+            </div>
+
+            <article class="flow-card wide">
+              <span class="flow-tag">Step 7</span>
+              <h3>Analyst review and decision</h3>
+              <p>
+                Analysts see the proposed category, supporting citations, and
+                recommended action. They approve, reject, or amend the decision,
+                preserving human oversight and governance.
+              </p>
+            </article>
+            <article class="flow-card wide">
+              <span class="flow-tag">Step 8</span>
+              <h3>Final HRE list and draft response support</h3>
+              <p>
+                The approved set of high-risk entities becomes the final monthly
+                HRE output and is also used to prepare draft responses or case
+                notes for analyst completion.
+              </p>
+            </article>
+            <article class="flow-card wide">
+              <span class="flow-tag">Feedback</span>
+              <h3>Continuous improvement loop</h3>
+              <p>
+                Approved and rejected decisions are fed back into the blacklist,
+                whitelist, keyword inventory, rule library, and prompt guidance
+                to improve future runs.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="analyst">
+        <div class="container">
+          <div class="section-head">
+            <h2>Analyst-facing experience</h2>
+            <p>
+              The intent is not to remove analysts from the process. It is to
+              elevate them from repetitive searching to high-value
+              decision-making with better context.
+            </p>
+          </div>
+          <div class="two-tone">
+            <article class="card">
+              <h3>What the analyst sees</h3>
+              <ul>
+                <li>Counterparty identity and category recommendation.</li>
+                <li>
+                  Why the entity was escalated: blacklist hit, rule hit, or
+                  LLM-assisted evidence.
+                </li>
+                <li>
+                  Citations and source links supporting the recommendation.
+                </li>
+                <li>
+                  Proposed final action: approve, reject, recategorize, or
+                  request deeper review.
+                </li>
+                <li>Draft response support based on the approved HRE list.</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>Business benefits</h3>
+              <ul>
+                <li>Lower review effort on obvious cases.</li>
+                <li>Higher consistency across analysts and monthly runs.</li>
+                <li>Stronger evidence trail for audit and governance.</li>
+                <li>
+                  Less dependence on tribal knowledge and manual web searching.
+                </li>
+                <li>
+                  Faster case turnaround without sacrificing analyst control.
+                </li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container foot-grid">
+        <div>
+          <small
+            >This document is as an initial proposal for a high-risk entity
+            detection solution.</small
+          >
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      (function () {
+        const toggle = document.querySelector("[data-theme-toggle]");
+        const root = document.documentElement;
+        let theme = window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+        root.setAttribute("data-theme", theme);
+        function renderIcon(mode) {
+          return mode === "dark"
+            ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path></svg>'
+            : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
+        }
+        if (toggle) {
+          toggle.innerHTML = renderIcon(theme);
+          toggle.addEventListener("click", function () {
+            theme = theme === "dark" ? "light" : "dark";
+            root.setAttribute("data-theme", theme);
+            toggle.innerHTML = renderIcon(theme);
+            toggle.setAttribute(
+              "aria-label",
+              theme === "dark" ? "Switch to light mode" : "Switch to dark mode",
+            );
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>

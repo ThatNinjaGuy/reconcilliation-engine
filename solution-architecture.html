@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DMU Workflow Platform — Solution Architecture</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --surface2: #243044;
+      --border: #3d4f6f;
+      --text: #e8edf5;
+      --muted: #9aa8be;
+      --accent: #4d8bff;
+      --accent2: #6ee7b7;
+      --warn: #fbbf24;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      font-size: 15px;
+    }
+    header.hero {
+      background: linear-gradient(135deg, #1a2a4a 0%, #0f1419 60%);
+      border-bottom: 1px solid var(--border);
+      padding: 48px 24px 40px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    header.hero h1 { margin: 0 0 8px; font-size: 2rem; font-weight: 700; }
+    header.hero p { margin: 0; color: var(--muted); max-width: 720px; }
+    .meta { margin-top: 16px; font-size: 13px; color: var(--muted); }
+    nav.toc {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(15, 20, 25, 0.92);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 24px;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    nav.toc a {
+      color: var(--accent);
+      text-decoration: none;
+      margin-right: 20px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    nav.toc a:hover { text-decoration: underline; }
+    main { max-width: 1100px; margin: 0 auto; padding: 32px 24px 80px; }
+    section { margin-bottom: 48px; scroll-margin-top: 56px; }
+    h2 {
+      font-size: 1.45rem;
+      border-left: 4px solid var(--accent);
+      padding-left: 14px;
+      margin: 0 0 16px;
+    }
+    h3 { font-size: 1.1rem; margin: 24px 0 10px; color: var(--accent2); }
+    h4 { font-size: 0.95rem; margin: 16px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    p { margin: 0 0 12px; color: #c5d0e0; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      margin-bottom: 16px;
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 800px) { .grid-2 { grid-template-columns: 1fr; } }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 12px 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--surface2); color: var(--muted); font-weight: 600; }
+    tr:nth-child(even) td { background: rgba(36, 48, 68, 0.35); }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(77, 139, 255, 0.2);
+      color: var(--accent);
+    }
+    .badge.done { background: rgba(110, 231, 183, 0.15); color: var(--accent2); }
+    .badge.phase2 { background: rgba(251, 191, 36, 0.15); color: var(--warn); }
+    .mermaid { background: var(--surface); border-radius: var(--radius); padding: 16px; margin: 16px 0; }
+    ul { margin: 8px 0 12px; padding-left: 22px; }
+    li { margin-bottom: 6px; color: #c5d0e0; }
+    code, .mono {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 12.5px;
+      background: var(--surface2);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .lld-block {
+      border-left: 3px solid var(--border);
+      padding-left: 16px;
+      margin: 12px 0 20px;
+    }
+    footer {
+      text-align: center;
+      padding: 24px;
+      color: var(--muted);
+      font-size: 12px;
+      border-top: 1px solid var(--border);
+    }
+    @media print {
+      body { background: #fff; color: #111; }
+      .card, th { background: #f5f5f5; }
+      nav.toc { display: none; }
+      h2 { color: #111; }
+      p, li { color: #333; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <h1>DMU Workflow Platform</h1>
+    <p>
+      Solution architecture for a config-driven, multi-team maker–checker operations platform.
+      This document maps stakeholder requirements to the delivered design, high-level components,
+      and low-level design (LLD) per component.
+    </p>
+    <div class="meta">Deliverable: React + TypeScript UI · FastAPI backend · SQLite (swappable persistence) · Provider-based integrations</div>
+  </header>
+
+  <nav class="toc">
+    <a href="#summary">Summary</a>
+    <a href="#requirements">Requirements</a>
+    <a href="#hld">High-level architecture</a>
+    <a href="#components">Components</a>
+    <a href="#lld">LLD by component</a>
+    <a href="#data">Data model</a>
+    <a href="#flows">Key flows</a>
+    <a href="#extensibility">Extensibility</a>
+  </nav>
+
+  <main>
+    <section id="summary">
+      <h2>1. Executive summary</h2>
+      <div class="card">
+        <p>
+          The platform is a <strong>metadata-driven workflow engine</strong>, not a single-purpose case app.
+          Each business team owns its own fields, dropdowns, workflow states, and optional bulk-update behavior.
+          <strong>Admin</strong> configures and bulk-manages data; <strong>Maker</strong> and <strong>Checker</strong>
+          operate records through role- and state-aware screens with dual control where configured.
+        </p>
+        <p>
+          Architecture follows a <strong>modular monolith</strong>: clear domain boundaries inside one deployable
+          backend, a separate SPA frontend, and a <strong>repository abstraction</strong> so the database layer
+          can be replaced (e.g. PostgreSQL) without rewriting business logic. Cross-cutting concerns
+          (identity, notifications, file storage, time) use <strong>provider interfaces</strong> with
+          stub/local implementations suitable for enterprise integration later.
+        </p>
+      </div>
+    </section>
+
+    <section id="requirements">
+      <h2>2. Requirements traceability</h2>
+      <p>Mapping from the consolidated requirement specification to solution elements.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Requirement area</th>
+            <th>How it is handled</th>
+            <th>Primary components</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Admin / Maker / Checker roles</td>
+            <td>Role from <code>CurrentUserProvider</code>; enforced in API via <code>require_role</code>; UI driven by capability descriptors</td>
+            <td>Identity provider, Capabilities, API deps</td>
+          </tr>
+          <tr>
+            <td>Configurable fields &amp; workflows per team</td>
+            <td>Draft → validate → publish config; work items bound to config version at create</td>
+            <td>ConfigService, Admin console UI</td>
+          </tr>
+          <tr>
+            <td>Bulk upload &amp; optional bulk update</td>
+            <td>Staged pipeline: parse → validate → classify rows → preview → commit; team toggle for bulk update</td>
+            <td>BulkService, Upload Center UI</td>
+          </tr>
+          <tr>
+            <td>Grid: search, sort, filter, export, bulk select</td>
+            <td>Server-side <code>QueryDescriptor</code> + <code>work_item_index</code> projection; Excel export service</td>
+            <td>WorkItemRepository, ExportService, Work Items UI</td>
+          </tr>
+          <tr>
+            <td>Maker–checker workflow</td>
+            <td>State machine from config transitions; dual control, mandatory comment/attachment, optimistic locking</td>
+            <td>WorkItemService.apply_action</td>
+          </tr>
+          <tr>
+            <td>Comments, attachments, audit</td>
+            <td>Append-only entities; application-layer AuditService; local-time display in UI</td>
+            <td>Collab repositories, AuditService, Team Audit UI</td>
+          </tr>
+          <tr>
+            <td>Assignment &amp; notifications (SOEID)</td>
+            <td>Assignee on work item; NotificationProvider writes to outbox (email stub)</td>
+            <td>WorkItemService, NotificationProvider, Outbox UI</td>
+          </tr>
+          <tr>
+            <td>Multi-team isolation</td>
+            <td>All config and data scoped by <code>team_id</code>; create team API + starter draft</td>
+            <td>Team entity, routes_platform</td>
+          </tr>
+          <tr>
+            <td>Admin manual update any record</td>
+            <td>Admin bypass on field permissions + expanded editable fields in capabilities</td>
+            <td>Capabilities, routes_workitems</td>
+          </tr>
+          <tr>
+            <td>Platform administrators visibility</td>
+            <td><code>GET /teams/{id}/admins</code> + sidebar panel</td>
+            <td>User provider, App shell</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>Explicitly deferred (enterprise / phase 2)</h3>
+      <ul>
+        <li><span class="badge phase2">Phase 2</span> SSO / entitlements, real SMTP, S3 attachments, async job queues, saved grid views, conditional rule engine, assignment-gated editing</li>
+      </ul>
+    </section>
+
+    <section id="hld">
+      <h2>3. High-level architecture (components)</h2>
+      <div class="mermaid">
+flowchart TB
+  subgraph clients [Presentation Tier]
+    SPA[React SPA - Vite]
+    Shell[App shell - team user nav]
+    Grid[Metadata-driven grid]
+    Detail[Dynamic form and workflow actions]
+    AdminUI[Config designer]
+    UploadUI[Upload center]
+    AuditUI[Team audit]
+  end
+
+  subgraph api [API Tier - FastAPI]
+    RPlatform[routes_platform]
+    RConfig[routes_config]
+    RWork[routes_workitems]
+    RUpload[routes_uploads]
+    Deps[deps - composition root]
+  end
+
+  subgraph domain [Domain and Application Tier]
+    ConfigSvc[ConfigService]
+    WorkSvc[WorkItemService]
+    BulkSvc[BulkService]
+    ExportSvc[ExportService]
+    Cap[Capabilities]
+    Valid[Validation]
+    Expr[Expression engine]
+    AuditSvc[AuditService]
+  end
+
+  subgraph providers [Integration Providers]
+    UserP[CurrentUserProvider]
+    NotifP[NotificationProvider]
+    StoreP[FileStorageProvider]
+    ClockP[ClockProvider]
+  end
+
+  subgraph persistence [Persistence Tier - swappable]
+    UoW[UnitOfWork interface]
+    SQLite[SQLite implementation]
+    DB[(dmu.db)]
+    Files[(local storage)]
+  end
+
+  SPA --> Shell
+  Shell --> Grid
+  Shell --> Detail
+  Shell --> AdminUI
+  Shell --> UploadUI
+  Shell --> AuditUI
+  SPA -->|REST JSON X-User-Id| api
+
+  RPlatform --> Deps
+  RConfig --> Deps
+  RWork --> Deps
+  RUpload --> Deps
+  Deps --> domain
+  Deps --> providers
+  domain --> UoW
+  providers --> UoW
+  StoreP --> Files
+  UoW --> SQLite
+  SQLite --> DB
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h4>Design principles</h4>
+          <ul>
+            <li><strong>Configuration-first</strong> — behavior from published team config, not hardcoded screens</li>
+            <li><strong>Server-side authority</strong> — permissions and workflow rules enforced in services</li>
+            <li><strong>CQRS-lite</strong> — writes through rich domain services; grid reads use index projection</li>
+            <li><strong>Swappable persistence</strong> — services depend only on repository interfaces</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>Repository layout</h4>
+          <ul>
+            <li><code>backend/</code> — FastAPI application</li>
+            <li><code>frontend/</code> — React TypeScript SPA</li>
+            <li><code>docs/solution-architecture.html</code> — this document</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="components">
+      <h2>4. High-level component catalog</h2>
+      <table>
+        <thead>
+          <tr><th>Component</th><th>Responsibility</th><th>Key artifacts</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Presentation (SPA)</strong></td>
+            <td>Metadata-driven UX for grid, detail, admin, uploads, audit; consumes capability descriptors</td>
+            <td><code>frontend/src/pages/*</code>, <code>FieldInput</code>, <code>AppContext</code></td>
+          </tr>
+          <tr>
+            <td><strong>API gateway</strong></td>
+            <td>REST endpoints, request validation, dependency injection, error mapping</td>
+            <td><code>backend/app/api/routes_*.py</code>, <code>deps.py</code></td>
+          </tr>
+          <tr>
+            <td><strong>Configuration service</strong></td>
+            <td>Team config lifecycle: draft, validate, publish; field &amp; workflow definitions</td>
+            <td><code>ConfigService</code></td>
+          </tr>
+          <tr>
+            <td><strong>Workflow / work item service</strong></td>
+            <td>Create, update, transitions, assignment, reminders, admin override</td>
+            <td><code>WorkItemService</code>, <code>capabilities.py</code></td>
+          </tr>
+          <tr>
+            <td><strong>Bulk ingestion</strong></td>
+            <td>Template generation, preview, commit, row-level outcomes</td>
+            <td><code>BulkService</code></td>
+          </tr>
+          <tr>
+            <td><strong>Audit &amp; compliance</strong></td>
+            <td>Append-only audit events with actor, old/new values, job context</td>
+            <td><code>AuditService</code>, <code>audit_events</code> table</td>
+          </tr>
+          <tr>
+            <td><strong>Identity &amp; notifications</strong></td>
+            <td>SOEID user context; email stub via outbox</td>
+            <td><code>providers/users.py</code>, <code>providers/notifications.py</code></td>
+          </tr>
+          <tr>
+            <td><strong>Persistence</strong></td>
+            <td>Transactional access; JSON field values + search index projection</td>
+            <td><code>repositories/interfaces.py</code>, <code>repositories/sqlite/*</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="lld">
+      <h2>5. Low-level design (LLD) by component</h2>
+
+      <div class="card">
+        <h3>5.1 Presentation tier (React SPA)</h3>
+        <div class="lld-block">
+          <h4>Modules</h4>
+          <ul>
+            <li><strong>App shell</strong> — team switcher, acting-as user (SOEID), role chip, nav, platform admins panel</li>
+            <li><strong>WorkItemsPage</strong> — server query (search/filters/sort/pagination), bulk select, export, reminders, admin create/delete</li>
+            <li><strong>WorkItemDetailPage</strong> — dynamic form from field schema + <code>capabilities</code>; tabs for comments, attachments, per-item audit; workflow action modal</li>
+            <li><strong>AdminConfigPage</strong> — field designer, workflow designer, team settings, versions, create team</li>
+            <li><strong>UploadCenterPage</strong> — template download, upload preview, commit, job history</li>
+            <li><strong>TeamAuditPage</strong> — team-wide audit log with filters</li>
+            <li><strong>FieldInput</strong> — renders control by field type (text, numeric, date, selects, boolean, calculated read-only)</li>
+          </ul>
+          <h4>Data flow</h4>
+          <p>All API calls go through <code>api.ts</code> with header <code>X-User-Id</code>. Active team config is loaded in <code>AppContext</code> for grid columns and forms. No permission logic is duplicated in UI beyond enabling/disabling from server descriptors.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>5.2 API tier (FastAPI)</h3>
+        <div class="lld-block">
+          <h4>Routers</h4>
+          <table>
+            <tr><th>Router</th><th>Endpoints (representative)</th></tr>
+            <tr><td>platform</td><td><code>GET/POST /teams</code>, users, admins, notifications, team audit</td></tr>
+            <tr><td>config</td><td>active/draft config, validate, publish, versions</td></tr>
+            <tr><td>workitems</td><td>query, export, CRUD, apply_action, assign, comments, attachments, bulk-delete, reminders</td></tr>
+            <tr><td>uploads</td><td>template, upload preview, commit, job detail, report download</td></tr>
+          </table>
+          <h4>Composition root</h4>
+          <p><code>deps.py</code> wires <code>SqliteUnitOfWork</code>, providers, and per-request <code>NotificationProvider</code>. One UoW per HTTP request; <code>commit()</code> on success.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>5.3 Configuration service</h3>
+        <div class="lld-block">
+          <h4>Entities</h4>
+          <p><code>ConfigVersion</code> contains <code>FieldDefinition[]</code>, <code>WorkflowState[]</code>, <code>WorkflowTransition[]</code>, <code>TeamSettings</code> (bulk update flag, unique identifier key).</p>
+          <h4>Lifecycle</h4>
+          <ol>
+            <li>Admin edits draft (or clones from active when opening draft)</li>
+            <li><code>validate()</code> — unique keys, workflow graph, calculated expressions, bulk-update settings</li>
+            <li><code>publish_draft()</code> — status published; audit event <code>config_published</code></li>
+          </ol>
+          <h4>Field access model</h4>
+          <p>Per field, per role: <code>visible</code>, <code>editable</code>, optional <code>editable_states[]</code>. Drives both API validation and UI capabilities.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>5.4 Workflow &amp; work item service</h3>
+        <div class="lld-block">
+          <h4>Work item system columns</h4>
+          <p><code>id</code>, <code>team_id</code>, <code>status</code>, <code>assignee_id</code>, <code>config_version_no</code>, <code>version</code> (optimistic lock), <code>last_transition_by</code>, <code>data</code> (JSON map of dynamic fields).</p>
+          <h4>apply_action (atomic unit)</h4>
+          <ul>
+            <li>Validate version, role, transition from-state, dual control, required comment/attachment</li>
+            <li>Validate field updates via <code>ValidationService</code> + role/state rules (admin bypass optional)</li>
+            <li>Recompute calculated fields via safe AST expression evaluator</li>
+            <li>Persist item, refresh index projection, write audit, optional notification</li>
+          </ul>
+          <h4>Capabilities descriptor</h4>
+          <p>Returned with every detail response: <code>visibleFields</code>, <code>editableFields</code>, <code>allowedActions</code> (with <code>blocked_reason</code> for dual control), <code>canReassign</code>, <code>canDelete</code>.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>5.5 Bulk ingestion service</h3>
+        <div class="lld-block">
+          <h4>Pipeline stages</h4>
+          <ol>
+            <li>Store raw file (FileStorageProvider)</li>
+            <li>Parse CSV/XLSX; match columns to field definitions + <code>assignee_soeid</code> (+ <code>status</code> on update)</li>
+            <li>Normalize &amp; validate each row; resolve identity via team unique identifier</li>
+            <li>Classify: create | update | duplicate | rejected | unchanged</li>
+            <li>Persist <code>UploadJob</code> + <code>UploadRowResult[]</code> in <code>previewed</code> state</li>
+            <li>On commit: apply creates/updates in transaction; per-row audit; assignment notifications</li>
+          </ol>
+          <h4>Rules</h4>
+          <p>Bulk update only if <code>TeamSettings.bulk_update_enabled</code>. Rows not in file are never modified. Duplicate detection: DB + within-file.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>5.6 Grid query &amp; export</h3>
+        <div class="lld-block">
+          <h4>QueryDescriptor</h4>
+          <p>search string, filters (eq/contains on system or indexed fields), sort, pagination, optional id list for selection export.</p>
+          <h4>Index projection</h4>
+          <p>Table <code>work_item_index</code>: one row per (work_item, field_key) for searchable/sortable/filterable/unique-id fields. Updated on every work item save.</p>
+          <h4>Export</h4>
+          <p><code>ExportService</code> uses same query semantics; columns = role-visible + exportable fields; Excel via openpyxl.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>5.7 Audit &amp; notifications</h3>
+        <div class="lld-block">
+          <h4>AuditService</h4>
+          <p>Central writer for action types: create, field_update, workflow_transition, assignment_change, comment_add, attachment_add, bulk_update, delete, upload_*, config_published, team_created. Stores UTC; UI renders local time.</p>
+          <h4>NotificationProvider</h4>
+          <p>Interface <code>send(team, type, recipient, subject, body, work_item_ids)</code>. Implementation appends to <code>notification_outbox</code> for demo; replace with enterprise mailer without changing callers.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>5.8 Persistence layer (swappable)</h3>
+        <div class="lld-block">
+          <h4>Pattern</h4>
+          <p><code>UnitOfWork</code> exposes repository interfaces: teams, configs, work_items, comments, attachments, audit, uploads, notifications. Only <code>repositories/sqlite/</code> references SQLAlchemy.</p>
+          <h4>Migration path</h4>
+          <p>Implement <code>repositories/postgres/</code> with same interfaces; change factory in <code>deps.py</code>. Dynamic values map naturally to JSONB in PostgreSQL.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>5.9 Identity provider</h3>
+        <div class="lld-block">
+          <p><code>HardcodedUserProvider</code> supplies SOEID, name, email, and global role per user. Header <code>X-User-Id</code> selects acting user for maker–checker demos. Replace with SSO/entitlements adapter implementing <code>CurrentUserProvider</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="data">
+      <h2>6. Data model (conceptual)</h2>
+      <div class="mermaid">
+erDiagram
+  Team ||--o{ ConfigVersion : has
+  ConfigVersion ||--|{ FieldDefinition : contains
+  ConfigVersion ||--|{ WorkflowState : contains
+  ConfigVersion ||--|{ WorkflowTransition : contains
+  Team ||--o{ WorkItem : owns
+  WorkItem ||--o{ Comment : has
+  WorkItem ||--o{ Attachment : has
+  WorkItem ||--o{ AuditEvent : generates
+  Team ||--o{ UploadJob : has
+  UploadJob ||--o{ UploadRowResult : contains
+  WorkItem {
+    string id
+    string status
+    string assignee_id
+    int version
+    json data
+  }
+      </div>
+      <p>Work items store team-specific field values in <code>data</code> JSON. Config version at create time supports audit reconstruction when rules change.</p>
+    </section>
+
+    <section id="flows">
+      <h2>7. Key sequence flows</h2>
+
+      <h3>7.1 Maker–checker transition</h3>
+      <div class="mermaid">
+sequenceDiagram
+  participant UI as Detail UI
+  participant API as WorkItem API
+  participant Svc as WorkItemService
+  participant Cap as Capabilities
+  participant Audit as AuditService
+
+  UI->>API: POST apply_action transition + fields + comment
+  API->>Svc: apply_action
+  Svc->>Cap: validate role state dual_control
+  Svc->>Svc: validate fields recompute calculated
+  Svc->>Audit: workflow_transition field_update
+  Svc-->>API: updated WorkItem
+  API->>Cap: capabilities_for
+  API-->>UI: item + capabilities
+      </div>
+
+      <h3>7.2 Bulk upload (create)</h3>
+      <div class="mermaid">
+sequenceDiagram
+  participant Admin as Upload UI
+  participant API as Upload API
+  participant Bulk as BulkService
+  participant Store as FileStorage
+  participant DB as UnitOfWork
+
+  Admin->>API: POST file preview
+  API->>Bulk: preview
+  Bulk->>Store: save original file
+  Bulk->>Bulk: validate classify rows
+  Bulk->>DB: UploadJob previewed + row results
+  Admin->>API: POST commit
+  API->>Bulk: commit_job
+  Bulk->>DB: create work items audit notify
+      </div>
+
+      <h3>7.3 Publish configuration</h3>
+      <div class="mermaid">
+sequenceDiagram
+  participant Admin as Config UI
+  participant API as Config API
+  participant Cfg as ConfigService
+  participant DB as UnitOfWork
+
+  Admin->>API: PUT draft
+  Admin->>API: POST validate
+  API->>Cfg: validate errors list
+  Admin->>API: POST publish
+  Cfg->>DB: draft to published
+  Cfg->>DB: audit config_published
+      </div>
+    </section>
+
+    <section id="extensibility">
+      <h2>8. Enterprise integration points</h2>
+      <table>
+        <thead>
+          <tr><th>Concern</th><th>Current</th><th>Enterprise target</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Authentication / SOEID</td><td><code>HardcodedUserProvider</code> + <code>X-User-Id</code></td><td>SSO gateway; map claims to <code>UserContext</code></td></tr>
+          <tr><td>Entitlements</td><td>Global role per user in provider</td><td>Per-team entitlements service</td></tr>
+          <tr><td>Email</td><td>Notification outbox table</td><td>SMTP / enterprise notification bus</td></tr>
+          <tr><td>Attachments / uploads</td><td>Local disk storage keys</td><td>S3-compatible object store</td></tr>
+          <tr><td>Database</td><td>SQLite file <code>dmu.db</code></td><td>PostgreSQL (+ JSONB, connection pooling)</td></tr>
+          <tr><td>Bulk / export scale</td><td>Synchronous HTTP</td><td>Background workers + job status polling</td></tr>
+        </tbody>
+      </table>
+      <div class="card" style="margin-top: 16px;">
+        <p><strong>How to view this document:</strong> open this file in any browser (double-click or <code>open docs/solution-architecture.html</code>). Diagrams render via Mermaid CDN; internet required on first load. Use Print → Save as PDF for stakeholder packs.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>DMU Workflow Platform — Solution Architecture · Generated for stakeholder review</footer>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "dark",
+      securityLevel: "loose",
+      flowchart: { curve: "basis" },
+    });
+  </script>
+</body>
+</html>
